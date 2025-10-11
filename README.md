@@ -7,12 +7,6 @@ A comprehensive vehicle parking management system built with Flask (Backend) and
 This parking management system provides a complete solution for managing parking lots, reservations, and user accounts with role-based access control.
 
 ### **Key Features:**
-- **User Management**: Registration, login, and profile management
-- **Admin Dashboard**: Parking lot management, user oversight, analytics
-- **Parking System**: Real-time spot availability, reservation system
-- **Cost Calculation**: Automatic billing based on parking duration
-- **Analytics**: Revenue tracking and usage statistics
-- **Background Jobs**: Automated reminders and reports
 
 ## 🏗️ Architecture
 
@@ -27,7 +21,6 @@ This parking management system provides a complete solution for managing parking
 - Modern Vue.js 3 with Composition API
 - Bootstrap 5 for clean, responsive UI
 - Axios for API communication
-- Chart.js for analytics visualization
 
 ## 📊 Milestone Progress
 
@@ -85,16 +78,6 @@ npm run dev
 - Chart.js
 - Axios
 
-## 📝 API Documentation
-
-The API follows RESTful conventions with JWT authentication:
-
-- `POST /api/auth/login` - User authentication
-- `POST /api/auth/register` - User registration
-- `GET /api/parking-lots` - List available parking lots
-- `POST /api/reservations` - Create new reservation
-- `GET /api/admin/dashboard` - Admin analytics
-
 ## 🎯 Project Goals
 
 1. **Functionality First**: Clean, working features over fancy UI
@@ -111,5 +94,4 @@ The API follows RESTful conventions with JWT authentication:
 ## 📄 License
 
 This project is developed as part of academic coursework for IIT Madras MAD II course.
-
 ---
