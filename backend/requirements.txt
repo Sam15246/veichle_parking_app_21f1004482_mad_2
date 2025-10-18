@@ -1,34 +1,6 @@
-# Core Flask Requirements
-Flask
-Flask-SQLAlchemy
-Flask-RESTful
-Flask-JWT-Extended
-Flask-CORS
-Flask-Migrate
-
-# Database
-sqlite3
-
-# Password hashing
-bcrypt
-Werkzeug
-
-# Environment management
-python-dotenv
-
-# Validation
-marshmallow
-
-# Background Jobs
-celery
-redis
-
-# Analytics & Charts
-matplotlib
-pandas
-
-# Email/Notifications 
-Flask-Mail
-
-# Development
-python-dateutil
+Flask==2.3.3
+Flask-SQLAlchemy==3.0.5
+Flask-CORS==4.0.0
+Flask-RESTful==0.3.10
+Flask-JWT-Extended==4.5.3
+Werkzeug==2.3.7
