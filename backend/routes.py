@@ -30,7 +30,7 @@ class UserRegister(Resource):
         if User.query.filter_by(email=data['email']).first():
             return {'message': 'Email already exists'}, 400
         
-        # Create new user
+        # Create new user (only regular users can register)
         try:
             new_user = User(
                 username=data['username'],
@@ -39,7 +39,8 @@ class UserRegister(Resource):
                 full_name=data['full_name'],
                 phone=data.get('phone'),
                 address=data.get('address'),
-                pin_code=data.get('pin_code')
+                pin_code=data.get('pin_code'),
+                role='user'  # Force role to be 'user' - no admin registration
             )
             db.session.add(new_user)
             db.session.commit()
@@ -84,10 +85,132 @@ class UserLogin(Resource):
 
 api.add_resource(UserLogin, '/api/login')
 
-# Parking Lots API
-class ParkingLotsAPI(Resource):
+# Admin-only Login (separate endpoint for clarity)
+class AdminLogin(Resource):
+    def post(self):
+        data = request.get_json()
+        
+        if not data or 'username' not in data or 'password' not in data:
+            return {'message': 'Username and password required'}, 400
+        
+        user = User.query.filter_by(username=data['username'], role='admin').first()
+        
+        if not user or user.password != data['password']:
+            return {'message': 'Invalid admin credentials'}, 401
+        
+        # Create access token
+        token = create_access_token(identity=user.username)
+        
+        return {
+            'message': 'Admin login successful',
+            'token': token,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'full_name': user.full_name,
+                'role': user.role
+            }
+        }, 200
+
+api.add_resource(AdminLogin, '/api/admin/login')
+
+# Protected Routes
+class UserProfile(Resource):
+    @jwt_required()
     def get(self):
-        """Get all parking lots with availability info"""
+        """Get current user profile"""
+        try:
+            current_user = User.query.filter_by(username=get_jwt_identity()).first()
+            
+            if not current_user:
+                return {'message': 'User not found'}, 404
+            
+            return {
+                'user': {
+                    'id': current_user.id,
+                    'username': current_user.username,
+                    'email': current_user.email,
+                    'full_name': current_user.full_name,
+                    'phone': current_user.phone,
+                    'address': current_user.address,
+                    'pin_code': current_user.pin_code,
+                    'role': current_user.role,
+                    'created_at': current_user.created_at.isoformat()
+                }
+            }, 200
+            
+        except Exception as e:
+            return {'message': 'Failed to get user profile', 'error': str(e)}, 500
+
+api.add_resource(UserProfile, '/api/profile')
+
+class AdminDashboard(Resource):
+    @jwt_required()
+    def get(self):
+        """Admin dashboard data"""
+        try:
+            current_user = User.query.filter_by(username=get_jwt_identity()).first()
+            
+            if not current_user or current_user.role != 'admin':
+                return {'message': 'Admin access required'}, 403
+            
+            # Get dashboard statistics
+            total_users = User.query.filter_by(role='user').count()
+            total_lots = ParkingLot.query.count()
+            total_spots = ParkingSpot.query.count()
+            active_reservations = Reservation.query.filter_by(status=ReservationStatus.ACTIVE.value).count()
+            
+            return {
+                'message': 'Admin dashboard data',
+                'statistics': {
+                    'total_users': total_users,
+                    'total_parking_lots': total_lots,
+                    'total_parking_spots': total_spots,
+                    'active_reservations': active_reservations
+                }
+            }, 200
+            
+        except Exception as e:
+            return {'message': 'Failed to get admin dashboard data', 'error': str(e)}, 500
+
+api.add_resource(AdminDashboard, '/api/admin/dashboard')
+
+class UserDashboard(Resource):
+    @jwt_required()
+    def get(self):
+        """User dashboard data"""
+        try:
+            current_user = User.query.filter_by(username=get_jwt_identity()).first()
+            
+            if not current_user:
+                return {'message': 'User not found'}, 404
+                
+            if current_user.role != 'user':
+                return {'message': 'User access required'}, 403
+            
+            # Get user's reservations
+            user_reservations = len(current_user.reservations)
+            active_reservations = len([r for r in current_user.reservations if r.status == ReservationStatus.ACTIVE.value])
+            
+            return {
+                'message': 'User dashboard data',
+                'user_data': {
+                    'total_reservations': user_reservations,
+                    'active_reservations': active_reservations,
+                    'available_lots': ParkingLot.query.count()
+                }
+            }, 200
+            
+        except Exception as e:
+            return {'message': 'Failed to get user dashboard data', 'error': str(e)}, 500
+
+api.add_resource(UserDashboard, '/api/user/dashboard')
+
+# Public Routes
+class ParkingLotsPublic(Resource):
+    def get(self):
+        """Get all parking lots (public access)"""
         try:
             lots = ParkingLot.query.all()
             lots_data = []
@@ -101,8 +224,7 @@ class ParkingLotsAPI(Resource):
                     'price_per_hour': lot.price_per_hour,
                     'maximum_spots': lot.maximum_spots,
                     'available_spots': lot.available_spots_count,
-                    'occupied_spots': lot.occupied_spots_count,
-                    'created_at': lot.created_at.isoformat()
+                    'occupied_spots': lot.occupied_spots_count
                 })
             
             return {
@@ -116,90 +238,7 @@ class ParkingLotsAPI(Resource):
                 'error': str(e)
             }, 500
 
-    @jwt_required()
-    def post(self):
-        """Create new parking lot (Admin only)"""
-        try:
-            current_user = User.query.filter_by(username=get_jwt_identity()).first()
-            
-            if not current_user or current_user.role != 'admin':
-                return {'message': 'Admin access required'}, 403
-            
-            data = request.get_json()
-            required_fields = ['prime_location_name', 'address', 'pin_code', 'maximum_spots']
-            
-            for field in required_fields:
-                if not data or field not in data or not data[field]:
-                    return {'message': f'{field} is required'}, 400
-            
-            # Check if location already exists
-            if ParkingLot.query.filter_by(prime_location_name=data['prime_location_name']).first():
-                return {'message': 'Parking lot with this location name already exists'}, 400
-            
-            new_lot = ParkingLot(
-                prime_location_name=data['prime_location_name'],
-                address=data['address'],
-                pin_code=data['pin_code'],
-                price_per_hour=data.get('price_per_hour', 20.0),
-                maximum_spots=data['maximum_spots']
-            )
-            
-            db.session.add(new_lot)
-            db.session.commit()
-            
-            # Create parking spots for this lot
-            from models import create_parking_spots_for_lot
-            create_parking_spots_for_lot(new_lot.id, new_lot.maximum_spots)
-            
-            return {
-                'message': 'Parking lot created successfully',
-                'lot_id': new_lot.id
-            }, 201
-            
-        except Exception as e:
-            db.session.rollback()
-            return {'message': 'Failed to create parking lot', 'error': str(e)}, 500
-
-api.add_resource(ParkingLotsAPI, '/api/parking-lots')
-
-# Users API (Admin only)
-class UsersAPI(Resource):
-    @jwt_required()
-    def get(self):
-        """Get all users (Admin only)"""
-        try:
-            current_user = User.query.filter_by(username=get_jwt_identity()).first()
-            
-            if not current_user or current_user.role != 'admin':
-                return {'message': 'Admin access required'}, 403
-            
-            users = User.query.all()
-            users_data = []
-            
-            for user in users:
-                users_data.append({
-                    'id': user.id,
-                    'username': user.username,
-                    'email': user.email,
-                    'full_name': user.full_name,
-                    'phone': user.phone,
-                    'role': user.role,
-                    'created_at': user.created_at.isoformat(),
-                    'total_reservations': len(user.reservations)
-                })
-            
-            return {
-                'message': 'Users retrieved successfully',
-                'data': users_data
-            }, 200
-            
-        except Exception as e:
-            return {
-                'message': 'Failed to retrieve users',
-                'error': str(e)
-            }, 500
-
-api.add_resource(UsersAPI, '/api/users')
+api.add_resource(ParkingLotsPublic, '/api/parking-lots')
 
 # Database Test Route
 class DatabaseTest(Resource):

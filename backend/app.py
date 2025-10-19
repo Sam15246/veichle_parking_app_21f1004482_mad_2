@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from werkzeug.security import generate_password_hash
 import os
 
 # Import models and routes
@@ -14,6 +15,7 @@ def create_app():
     # Configuration
     app.config['SECRET_KEY'] = 'your-secret-key-here'  # Change this in production
     app.config['JWT_SECRET_KEY'] = 'jwt-secret-string'  # Change this in production
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False  # For development, tokens don't expire
     
     # Database configuration
     basedir = os.path.abspath(os.path.dirname(__file__))
