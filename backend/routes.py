@@ -2,7 +2,8 @@ from flask_restful import Api, Resource
 from flask import request, jsonify
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from models import db, User, ParkingLot, ParkingSpot, Reservation, SpotStatus, ReservationStatus
-from datetime import datetime
+from models import create_parking_spots_for_lot  # helper for initial spot generation
+from string import ascii_uppercase
 
 api = Api()
 
@@ -267,3 +268,211 @@ class DatabaseTest(Resource):
             }, 500
 
 api.add_resource(DatabaseTest, '/api/database/test')
+
+# ------------------------ Admin: Parking Lots CRUD ------------------------
+
+class AdminLotsAPI(Resource):
+    @jwt_required()
+    def get(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'admin':
+            return {'message': 'Admin access required'}, 403
+
+        lots = ParkingLot.query.all()
+        data = []
+        for lot in lots:
+            data.append({
+                'id': lot.id,
+                'prime_location_name': lot.prime_location_name,
+                'address': lot.address,
+                'pin_code': lot.pin_code,
+                'price_per_hour': lot.price_per_hour,
+                'maximum_spots': lot.maximum_spots,
+                'available_spots': lot.available_spots_count,
+                'occupied_spots': lot.occupied_spots_count,
+                'created_at': lot.created_at.isoformat()
+            })
+        return {'message': 'Lots fetched', 'data': data}, 200
+
+    @jwt_required()
+    def post(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'admin':
+            return {'message': 'Admin access required'}, 403
+
+        data = request.get_json() or {}
+        required = ['prime_location_name', 'address', 'pin_code', 'maximum_spots']
+        for f in required:
+            if not data.get(f):
+                return {'message': f'{f} is required'}, 400
+
+        if ParkingLot.query.filter_by(prime_location_name=data['prime_location_name']).first():
+            return {'message': 'Parking lot name must be unique'}, 400
+
+        try:
+            lot = ParkingLot(
+                prime_location_name=data['prime_location_name'],
+                address=data['address'],
+                pin_code=data['pin_code'],
+                price_per_hour=float(data.get('price_per_hour', 20.0)),
+                maximum_spots=int(data['maximum_spots'])
+            )
+            db.session.add(lot); db.session.commit()
+
+            # Auto-create spots to match capacity
+            create_parking_spots_for_lot(lot.id, lot.maximum_spots)
+
+            return {'message': 'Lot created', 'id': lot.id}, 201
+        except Exception as e:
+            db.session.rollback()
+            return {'message': 'Failed to create lot', 'error': str(e)}, 500
+
+api.add_resource(AdminLotsAPI, '/api/admin/lots')
+
+class AdminLotDetailAPI(Resource):
+    @jwt_required()
+    def put(self, lot_id):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'admin':
+            return {'message': 'Admin access required'}, 403
+
+        lot = ParkingLot.query.get(lot_id)
+        if not lot:
+            return {'message': 'Lot not found'}, 404
+
+        data = request.get_json() or {}
+        try:
+            # Rename with uniqueness
+            if 'prime_location_name' in data and data['prime_location_name']:
+                existing = ParkingLot.query.filter_by(prime_location_name=data['prime_location_name']).first()
+                if existing and existing.id != lot.id:
+                    return {'message': 'Parking lot name must be unique'}, 400
+                lot.prime_location_name = data['prime_location_name']
+
+            if 'address' in data and data['address'] is not None:
+                lot.address = data['address']
+            if 'pin_code' in data and data['pin_code'] is not None:
+                lot.pin_code = data['pin_code']
+            if 'price_per_hour' in data and data['price_per_hour'] is not None:
+                lot.price_per_hour = float(data['price_per_hour'])
+
+            # Capacity rules: only allow increase. Append new spots, do not remove existing.
+            if 'maximum_spots' in data and data['maximum_spots'] is not None:
+                new_max = int(data['maximum_spots'])
+                current_count = len(lot.parking_spots)
+
+                if new_max < current_count:
+                    return {'message': 'Reducing capacity below existing spots is not allowed'}, 400
+
+                if new_max > current_count:
+                    to_create = new_max - current_count
+                    created = 0
+                    for letter in ascii_uppercase:
+                        if created >= to_create: break
+                        for number in range(1, 1000):  # safe upper bound
+                            if created >= to_create: break
+                            spot_number = f'{letter}{number}'
+                            exists = ParkingSpot.query.filter_by(lot_id=lot.id, spot_number=spot_number).first()
+                            if exists:
+                                continue
+                            db.session.add(ParkingSpot(
+                                lot_id=lot.id,
+                                spot_number=spot_number,
+                                status=SpotStatus.AVAILABLE.value
+                            ))
+                            created += 1
+                    lot.maximum_spots = new_max
+
+            db.session.commit()
+            return {'message': 'Lot updated'}, 200
+        except Exception as e:
+            db.session.rollback()
+            return {'message': 'Failed to update lot', 'error': str(e)}, 500
+
+    @jwt_required()
+    def delete(self, lot_id):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'admin':
+            return {'message': 'Admin access required'}, 403
+
+        lot = ParkingLot.query.get(lot_id)
+        if not lot:
+            return {'message': 'Lot not found'}, 404
+
+        # Block delete if any spot occupied
+        any_occupied = any(s.status == SpotStatus.OCCUPIED.value for s in lot.parking_spots)
+        if any_occupied:
+            return {'message': 'Cannot delete lot with occupied spots'}, 400
+
+        # Block delete if any reservations exist for this lot (any status)
+        any_res = db.session.query(Reservation).join(ParkingSpot, Reservation.spot_id == ParkingSpot.id)\
+            .filter(ParkingSpot.lot_id == lot_id).first()
+        if any_res:
+            return {'message': 'Cannot delete lot with existing reservations'}, 400
+
+        try:
+            db.session.delete(lot)
+            db.session.commit()
+            return {'message': 'Lot deleted'}, 200
+        except Exception as e:
+            db.session.rollback()
+            return {'message': 'Failed to delete lot', 'error': str(e)}, 500
+
+api.add_resource(AdminLotDetailAPI, '/api/admin/lots/<int:lot_id>')
+
+class AdminLotSpotsAPI(Resource):
+    @jwt_required()
+    def get(self, lot_id):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'admin':
+            return {'message': 'Admin access required'}, 403
+
+        lot = ParkingLot.query.get(lot_id)
+        if not lot:
+            return {'message': 'Lot not found'}, 404
+
+        spots = ParkingSpot.query.filter_by(lot_id=lot_id).order_by(ParkingSpot.spot_number.asc()).all()
+        data = [{
+            'id': s.id,
+            'spot_number': s.spot_number,
+            'status': s.status
+        } for s in spots]
+
+        return {
+            'message': 'Spots fetched',
+            'lot': {
+                'id': lot.id,
+                'prime_location_name': lot.prime_location_name,
+                'available_spots': lot.available_spots_count,
+                'occupied_spots': lot.occupied_spots_count,
+                'maximum_spots': lot.maximum_spots
+            },
+            'data': data
+        }, 200
+
+api.add_resource(AdminLotSpotsAPI, '/api/admin/lots/<int:lot_id>/spots')
+
+# ------------------------ Admin: Users List ------------------------
+class AdminUsersAPI(Resource):
+    @jwt_required()
+    def get(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'admin':
+            return {'message': 'Admin access required'}, 403
+
+        users = User.query.all()
+        data = []
+        for u in users:
+            active_res = Reservation.query.filter_by(user_id=u.id, status=ReservationStatus.ACTIVE.value).first()
+            data.append({
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'full_name': u.full_name,
+                'role': u.role,
+                'active_spot_number': active_res.parking_spot.spot_number if active_res else None,
+                'active_lot': active_res.parking_spot.parking_lot.prime_location_name if active_res else None
+            })
+        return {'message': 'Users fetched', 'data': data}, 200
+
+api.add_resource(AdminUsersAPI, '/api/admin/users')

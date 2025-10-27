@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
-from werkzeug.security import generate_password_hash
 import os
 
 # Import models and routes

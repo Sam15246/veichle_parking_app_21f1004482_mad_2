@@ -93,52 +93,128 @@
         </div>
       </div>
 
-      <!-- Quick Actions -->
-      <div class="row">
-        <div class="col">
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">Quick Actions</h5>
+      <!-- Manage Parking Lots -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Manage Parking Lots</h5>
+          <button class="btn btn-sm btn-primary" @click="resetLotForm">Add New Lot</button>
+        </div>
+        <div class="card-body">
+          <!-- Create/Update Form -->
+          <form class="row g-3" @submit.prevent="submitLot">
+            <div class="col-md-3">
+              <label class="form-label">Location Name</label>
+              <input v-model="lotForm.prime_location_name" class="form-control" required />
             </div>
-            <div class="card-body">
-              <div class="row">
-                <div class="col-md-6 mb-3">
-                  <div class="d-grid">
-                    <button class="btn btn-outline-primary">
-                      <i class="bi bi-plus-circle"></i>
-                      Manage Parking Lots
-                    </button>
-                  </div>
-                </div>
-                <div class="col-md-6 mb-3">
-                  <div class="d-grid">
-                    <button class="btn btn-outline-success">
-                      <i class="bi bi-people"></i>
-                      View All Users
-                    </button>
-                  </div>
-                </div>
-                <div class="col-md-6 mb-3">
-                  <div class="d-grid">
-                    <button class="btn btn-outline-info">
-                      <i class="bi bi-bar-chart"></i>
-                      View Analytics
-                    </button>
-                  </div>
-                </div>
-                <div class="col-md-6 mb-3">
-                  <div class="d-grid">
-                    <button class="btn btn-outline-warning">
-                      <i class="bi bi-list-check"></i>
-                      View Reservations
-                    </button>
-                  </div>
-                </div>
-              </div>
+            <div class="col-md-3">
+              <label class="form-label">Address</label>
+              <input v-model="lotForm.address" class="form-control" required />
             </div>
+            <div class="col-md-2">
+              <label class="form-label">Pin Code</label>
+              <input v-model="lotForm.pin_code" class="form-control" required />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Price/Hour</label>
+              <input type="number" step="0.01" v-model.number="lotForm.price_per_hour" class="form-control" required />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label">Capacity</label>
+              <input type="number" min="1" v-model.number="lotForm.maximum_spots" class="form-control" required />
+            </div>
+            <div class="col-12">
+              <button class="btn btn-success me-2" type="submit">
+                {{ lotForm.id ? 'Update Lot' : 'Create Lot' }}
+              </button>
+              <span v-if="lotMessage" :class="['ms-2', lotMessageType==='error'?'text-danger':'text-success']">
+                {{ lotMessage }}
+              </span>
+            </div>
+          </form>
+
+          <!-- Lots Table -->
+          <div class="table-responsive mt-4">
+            <table class="table table-striped align-middle">
+              <thead>
+                <tr>
+                  <th>Name</th><th>Pin</th><th>Price</th><th>Capacity</th><th>Avail</th><th>Occ</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="lot in lots" :key="lot.id">
+                  <td>{{ lot.prime_location_name }}</td>
+                  <td>{{ lot.pin_code }}</td>
+                  <td>{{ lot.price_per_hour }}</td>
+                  <td>{{ lot.maximum_spots }}</td>
+                  <td>{{ lot.available_spots }}</td>
+                  <td>{{ lot.occupied_spots }}</td>
+                  <td class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-primary" @click="editLot(lot)">Edit</button>
+                    <button class="btn btn-sm btn-outline-info" @click="viewSpots(lot)">Spots</button>
+                    <button class="btn btn-sm btn-outline-danger" @click="deleteLot(lot)">Delete</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
+
+      <!-- Spots Viewer -->
+      <div class="card mb-4" v-if="selectedLot">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Spots in {{ selectedLot.prime_location_name }}</h5>
+          <button class="btn btn-sm btn-outline-secondary" @click="selectedLot = null">Close</button>
+        </div>
+        <div class="card-body">
+          <div class="mb-2">
+            <span class="badge bg-success me-2">Available: {{ spotsSummary.available_spots }}</span>
+            <span class="badge bg-danger">Occupied: {{ spotsSummary.occupied_spots }}</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered">
+              <thead><tr><th>#</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr v-for="s in spots" :key="s.id">
+                  <td>{{ s.spot_number }}</td>
+                  <td>
+                    <span class="badge" :class="s.status==='A'?'bg-success':'bg-danger'">
+                      {{ s.status==='A'?'Available':'Occupied' }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Users List -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="mb-0">Users</h5>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-striped align-middle">
+              <thead>
+                <tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Active Spot</th><th>Lot</th></tr>
+              </thead>
+              <tbody>
+                <tr v-for="u in users" :key="u.id">
+                  <td>{{ u.username }}</td>
+                  <td>{{ u.full_name }}</td>
+                  <td>{{ u.email }}</td>
+                  <td><span class="badge" :class="u.role==='admin'?'bg-danger':'bg-primary'">{{ u.role }}</span></td>
+                  <td>{{ u.active_spot_number || '-' }}</td>
+                  <td>{{ u.active_lot || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
@@ -159,6 +235,17 @@ const statistics = ref({
   total_parking_spots: 0,
   active_reservations: 0
 })
+
+const lots = ref([])
+const lotForm = ref({ id: null, prime_location_name: '', address: '', pin_code: '', price_per_hour: 20, maximum_spots: 10 })
+const lotMessage = ref('')
+const lotMessageType = ref('success')
+
+const selectedLot = ref(null)
+const spots = ref([])
+const spotsSummary = ref({ available_spots: 0, occupied_spots: 0 })
+
+const users = ref([])
 
 // Get user info from localStorage
 onMounted(async () => {
@@ -209,6 +296,73 @@ const logout = () => {
   localStorage.removeItem('userFullName')
   router.push('/login')
 }
+
+// Lots
+const loadLots = async () => {
+  const res = await axios.get('http://localhost:5000/api/admin/lots', { headers: authHeader() })
+  lots.value = res.data.data
+}
+
+const resetLotForm = () => {
+  lotForm.value = { id: null, prime_location_name: '', address: '', pin_code: '', price_per_hour: 20, maximum_spots: 10 }
+  lotMessage.value = ''
+}
+
+const submitLot = async () => {
+  try {
+    if (lotForm.value.id) {
+      await axios.put(`http://localhost:5000/api/admin/lots/${lotForm.value.id}`, lotForm.value, { headers: authHeader() })
+      lotMessage.value = 'Lot updated'; lotMessageType.value = 'success'
+    } else {
+      await axios.post('http://localhost:5000/api/admin/lots', lotForm.value, { headers: authHeader() })
+      lotMessage.value = 'Lot created'; lotMessageType.value = 'success'
+    }
+    await loadLots(); resetLotForm()
+  } catch (e) {
+    lotMessage.value = e?.response?.data?.message || 'Operation failed'
+    lotMessageType.value = 'error'
+  }
+}
+
+const editLot = (lot) => {
+  lotForm.value = { ...lot, id: lot.id }
+  lotMessage.value = ''
+}
+
+const deleteLot = async (lot) => {
+  if (!confirm(`Delete lot "${lot.prime_location_name}"? This cannot be undone.`)) return
+  try {
+    await axios.delete(`http://localhost:5000/api/admin/lots/${lot.id}`, { headers: authHeader() })
+    await loadLots()
+    if (selectedLot.value?.id === lot.id) selectedLot.value = null
+  } catch (e) {
+    alert(e?.response?.data?.message || 'Delete failed')
+  }
+}
+
+const viewSpots = async (lot) => {
+  selectedLot.value = lot
+  const res = await axios.get(`http://localhost:5000/api/admin/lots/${lot.id}/spots`, { headers: authHeader() })
+  spots.value = res.data.data
+  spotsSummary.value = {
+    available_spots: res.data.lot.available_spots,
+    occupied_spots: res.data.lot.occupied_spots
+  }
+}
+
+// Users
+const loadUsers = async () => {
+  const res = await axios.get('http://localhost:5000/api/admin/users', { headers: authHeader() })
+  users.value = res.data.data
+}
+
+// Enhance mounted to load lists too
+onMounted(async () => {
+  // ...existing auth + base stats...
+  await Promise.all([loadDashboardData(), loadLots(), loadUsers()])
+})
+
+const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` })
 </script>
 
 <style scoped>
