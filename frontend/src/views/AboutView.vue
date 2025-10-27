@@ -1,8 +1,13 @@
 <template>
-  <div class="about">
-    <h1>This is an about page</h1>
+  <div class="container mt-4">
+    <h2>About</h2>
+    <p class="text-muted">Smart vehicle parking management app (Flask + Vue 3).</p>
   </div>
 </template>
+
+<script setup>
+// no-op
+</script>
 
 <style>
 @media (min-width: 1024px) {

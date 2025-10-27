@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from enum import Enum
+from werkzeug.security import generate_password_hash
 
 db = SQLAlchemy()
 
@@ -181,7 +182,7 @@ class Admin:
             admin = User(
                 username='admin',
                 email='admin@parking.com',
-                password='admin123',  # In production, this should be hashed
+                password=generate_password_hash('admin123'),  # hash
                 full_name='System Administrator',
                 role='admin'
             )
@@ -201,7 +202,7 @@ def init_sample_data():
         user1 = User(
             username='user1',
             email='user1@example.com',
-            password='user123',
+            password=generate_password_hash('user123'),  # hash
             full_name='John Doe',
             phone='9876543210',
             address='123 Main Street',
@@ -213,7 +214,7 @@ def init_sample_data():
         user2 = User(
             username='user2',
             email='user2@example.com',
-            password='user123',
+            password=generate_password_hash('user123'),  # hash
             full_name='Jane Smith',
             phone='9876543211',
             address='456 Park Avenue',
@@ -247,5 +248,4 @@ def init_sample_data():
         create_parking_spots_for_lot(lot2.id, 75)
     
     db.session.commit()
-    print("Sample data initialized successfully!")
     print("Sample data initialized successfully!")

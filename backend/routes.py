@@ -4,6 +4,7 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from models import db, User, ParkingLot, ParkingSpot, Reservation, SpotStatus, ReservationStatus
 from models import create_parking_spots_for_lot  # helper for initial spot generation
 from string import ascii_uppercase
+from werkzeug.security import generate_password_hash, check_password_hash
 
 api = Api()
 
@@ -36,7 +37,7 @@ class UserRegister(Resource):
             new_user = User(
                 username=data['username'],
                 email=data['email'],
-                password=data['password'],  # In production, hash this
+                password=generate_password_hash(data['password']),  # hash password
                 full_name=data['full_name'],
                 phone=data.get('phone'),
                 address=data.get('address'),
@@ -66,7 +67,7 @@ class UserLogin(Resource):
         
         user = User.query.filter_by(username=data['username']).first()
         
-        if not user or user.password != data['password']:  # In production, use proper password hashing
+        if not user or not check_password_hash(user.password, data['password']):
             return {'message': 'Invalid credentials'}, 401
         
         # Create access token
@@ -96,7 +97,7 @@ class AdminLogin(Resource):
         
         user = User.query.filter_by(username=data['username'], role='admin').first()
         
-        if not user or user.password != data['password']:
+        if not user or not check_password_hash(user.password, data['password']):
             return {'message': 'Invalid admin credentials'}, 401
         
         # Create access token
