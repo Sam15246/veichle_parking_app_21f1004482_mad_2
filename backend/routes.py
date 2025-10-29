@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from models import db, User, ParkingLot, ParkingSpot, Reservation, SpotStatus, ReservationStatus
 from models import create_parking_spots_for_lot  # helper for initial spot generation
 from string import ascii_uppercase
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash  # added
 
 api = Api()
 
@@ -67,7 +67,7 @@ class UserLogin(Resource):
         
         user = User.query.filter_by(username=data['username']).first()
         
-        if not user or not check_password_hash(user.password, data['password']):
+        if not user or not check_password_hash(user.password, data['password']):  # verify hash
             return {'message': 'Invalid credentials'}, 401
         
         # Create access token
@@ -97,7 +97,7 @@ class AdminLogin(Resource):
         
         user = User.query.filter_by(username=data['username'], role='admin').first()
         
-        if not user or not check_password_hash(user.password, data['password']):
+        if not user or not check_password_hash(user.password, data['password']):  # verify hash
             return {'message': 'Invalid admin credentials'}, 401
         
         # Create access token
@@ -477,3 +477,156 @@ class AdminUsersAPI(Resource):
         return {'message': 'Users fetched', 'data': data}, 200
 
 api.add_resource(AdminUsersAPI, '/api/admin/users')
+
+# ------------------------ User Reservations: Create/Release/Fetch ------------------------
+
+class CreateReservation(Resource):
+    @jwt_required()
+    def post(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user:
+            return {'message': 'User not found'}, 404
+
+        data = request.get_json() or {}
+        lot_id = data.get('lot_id')
+        vehicle_number = data.get('vehicle_number')
+
+        if not lot_id or not vehicle_number:
+            return {'message': 'lot_id and vehicle_number are required'}, 400
+
+        # One active reservation per user
+        active = Reservation.query.filter_by(user_id=current_user.id, status=ReservationStatus.ACTIVE.value).first()
+        if active:
+            return {'message': 'You already have an active reservation'}, 400
+
+        lot = ParkingLot.query.get(lot_id)
+        if not lot:
+            return {'message': 'Parking lot not found'}, 404
+
+        # First available spot in lot
+        spot = ParkingSpot.query.filter_by(lot_id=lot_id, status=SpotStatus.AVAILABLE.value)\
+                                .order_by(ParkingSpot.spot_number.asc()).first()
+        if not spot:
+            return {'message': 'No available spots in this lot'}, 409
+
+        try:
+            spot.status = SpotStatus.OCCUPIED.value
+            res = Reservation(
+                user_id=current_user.id,
+                spot_id=spot.id,
+                vehicle_number=vehicle_number,
+                status=ReservationStatus.ACTIVE.value
+            )
+            db.session.add(res)
+            db.session.commit()
+
+            return {
+                'message': 'Reservation created',
+                'reservation': {
+                    'id': res.id,
+                    'vehicle_number': res.vehicle_number,
+                    'status': res.status,
+                    'parking_timestamp': res.parking_timestamp.isoformat(),
+                    'spot': {'id': spot.id, 'spot_number': spot.spot_number},
+                    'lot': {'id': lot.id, 'name': lot.prime_location_name, 'price_per_hour': lot.price_per_hour}
+                }
+            }, 201
+        except Exception as e:
+            db.session.rollback()
+            return {'message': 'Failed to create reservation', 'error': str(e)}, 500
+
+api.add_resource(CreateReservation, '/api/reservations')
+
+class ReleaseReservation(Resource):
+    @jwt_required()
+    def post(self, reservation_id):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user:
+            return {'message': 'User not found'}, 404
+
+        res = Reservation.query.get(reservation_id)
+        if not res:
+            return {'message': 'Reservation not found'}, 404
+
+        # Only owner or admin can release
+        if res.user_id != current_user.id and current_user.role != 'admin':
+            return {'message': 'Not authorized to release this reservation'}, 403
+
+        if res.status != ReservationStatus.ACTIVE.value:
+            return {'message': 'Reservation already completed or cancelled'}, 400
+
+        try:
+            res.complete_reservation()  # sets leaving_timestamp, final_cost, frees spot
+            db.session.commit()
+            return {
+                'message': 'Reservation released',
+                'reservation': {
+                    'id': res.id,
+                    'status': res.status,
+                    'leaving_timestamp': res.leaving_timestamp.isoformat(),
+                    'final_cost': res.final_cost
+                }
+            }, 200
+        except Exception as e:
+            db.session.rollback()
+            return {'message': 'Failed to release reservation', 'error': str(e)}, 500
+
+api.add_resource(ReleaseReservation, '/api/reservations/<int:reservation_id>/release')
+
+class ActiveReservation(Resource):
+    @jwt_required()
+    def get(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user:
+            return {'message': 'User not found'}, 404
+
+        res = Reservation.query.filter_by(user_id=current_user.id, status=ReservationStatus.ACTIVE.value).first()
+        if not res:
+            return {'message': 'No active reservation', 'reservation': None}, 200
+
+        spot = res.parking_spot
+        lot = spot.parking_lot
+        return {
+            'message': 'Active reservation fetched',
+            'reservation': {
+                'id': res.id,
+                'vehicle_number': res.vehicle_number,
+                'status': res.status,
+                'parking_timestamp': res.parking_timestamp.isoformat(),
+                'duration_hours': res.duration_hours,
+                'calculated_cost': res.calculated_cost,
+                'spot': {'id': spot.id, 'spot_number': spot.spot_number},
+                'lot': {'id': lot.id, 'name': lot.prime_location_name, 'price_per_hour': lot.price_per_hour}
+            }
+        }, 200
+
+api.add_resource(ActiveReservation, '/api/user/reservations/active')
+
+class UserReservations(Resource):
+    @jwt_required()
+    def get(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user:
+            return {'message': 'User not found'}, 404
+
+        res_list = Reservation.query.filter_by(user_id=current_user.id).order_by(Reservation.created_at.desc()).all()
+
+        def serialize(r: Reservation):
+            spot = r.parking_spot
+            lot = spot.parking_lot if spot else None
+            return {
+                'id': r.id,
+                'vehicle_number': r.vehicle_number,
+                'status': r.status,
+                'parking_timestamp': r.parking_timestamp.isoformat() if r.parking_timestamp else None,
+                'leaving_timestamp': r.leaving_timestamp.isoformat() if r.leaving_timestamp else None,
+                'duration_hours': r.duration_hours,
+                'final_cost': r.final_cost,
+                'calculated_cost': r.calculated_cost,
+                'spot': {'id': spot.id, 'spot_number': spot.spot_number} if spot else None,
+                'lot': {'id': lot.id, 'name': lot.prime_location_name, 'price_per_hour': lot.price_per_hour} if lot else None
+            }
+
+        return {'message': 'Reservations fetched', 'data': [serialize(r) for r in res_list]}, 200
+
+api.add_resource(UserReservations, '/api/user/reservations')
