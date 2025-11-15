@@ -215,6 +215,58 @@
         </div>
       </div>
 
+      <!-- All Reservations (History) -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">All Reservations</h5>
+          <small class="text-muted">History with duration and cost</small>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>User</th>
+                  <th>Lot</th>
+                  <th>Spot</th>
+                  <th>Vehicle</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Duration (h)</th>
+                  <th>Status</th>
+                  <th>Price/hr</th>
+                  <th>Final Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in reservations" :key="r.id">
+                  <td>{{ r.id }}</td>
+                  <td>{{ r.user?.username }}</td>
+                  <td>{{ r.lot?.name }}</td>
+                  <td>{{ r.spot?.spot_number }}</td>
+                  <td>{{ r.vehicle_number }}</td>
+                  <td>{{ formatDate(r.parking_timestamp) }}</td>
+                  <td>{{ r.leaving_timestamp ? formatDate(r.leaving_timestamp) : '-' }}</td>
+                  <td>{{ r.duration_hours }}</td>
+                  <td>
+                    <span class="badge"
+                      :class="r.status==='COMPLETED' ? 'bg-success' : (r.status==='ACTIVE' ? 'bg-primary' : 'bg-secondary')">
+                      {{ r.status }}
+                    </span>
+                  </td>
+                  <td>₹ {{ r.lot?.price_per_hour }}</td>
+                  <td>₹ {{ r.final_cost ?? r.calculated_cost }}</td>
+                </tr>
+                <tr v-if="reservations.length===0">
+                  <td colspan="11" class="text-center text-muted">No reservations found</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
@@ -246,6 +298,7 @@ const spots = ref([])
 const spotsSummary = ref({ available_spots: 0, occupied_spots: 0 })
 
 const users = ref([])
+const reservations = ref([])
 
 // Get user info from localStorage
 onMounted(async () => {
@@ -356,13 +409,20 @@ const loadUsers = async () => {
   users.value = res.data.data
 }
 
+// Reservations
+const loadReservations = async () => {
+  const res = await axios.get('http://localhost:5000/api/admin/reservations', { headers: authHeader() })
+  reservations.value = res.data.data || []
+}
+
 // Enhance mounted to load lists too
 onMounted(async () => {
   // ...existing auth + base stats...
-  await Promise.all([loadDashboardData(), loadLots(), loadUsers()])
+  await Promise.all([loadDashboardData(), loadLots(), loadUsers(), loadReservations()])
 })
 
 const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` })
+const formatDate = (iso) => iso ? new Date(iso).toLocaleString() : '-'
 </script>
 
 <style scoped>

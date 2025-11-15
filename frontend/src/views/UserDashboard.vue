@@ -156,7 +156,7 @@
               <thead>
                 <tr>
                   <th>#</th><th>Lot</th><th>Spot</th><th>Vehicle</th>
-                  <th>Start</th><th>End</th><th>Status</th><th>Cost</th>
+                  <th>Start</th><th>End</th><th>Duration (h)</th><th>Status</th><th>Cost</th>
                 </tr>
               </thead>
               <tbody>
@@ -167,6 +167,7 @@
                   <td>{{ r.vehicle_number }}</td>
                   <td>{{ formatDate(r.parking_timestamp) }}</td>
                   <td>{{ r.leaving_timestamp ? formatDate(r.leaving_timestamp) : '-' }}</td>
+                  <td>{{ r.duration_hours }}</td>
                   <td>
                     <span class="badge"
                           :class="r.status==='COMPLETED'?'bg-success':(r.status==='ACTIVE'?'bg-primary':'bg-secondary')">
@@ -176,7 +177,7 @@
                   <td>₹ {{ r.final_cost ?? r.calculated_cost }}</td>
                 </tr>
                 <tr v-if="history.length===0">
-                  <td colspan="8" class="text-center text-muted">No reservations yet</td>
+                  <td colspan="9" class="text-center text-muted">No reservations yet</td>
                 </tr>
               </tbody>
             </table>

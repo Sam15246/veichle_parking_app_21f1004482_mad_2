@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from models import db, User, ParkingLot, ParkingSpot, Reservation, SpotStatus, ReservationStatus
 from models import create_parking_spots_for_lot  # helper for initial spot generation
 from string import ascii_uppercase
-from werkzeug.security import generate_password_hash, check_password_hash  # added
+from werkzeug.security import generate_password_hash, check_password_hash
 
 api = Api()
 
@@ -515,7 +515,8 @@ class CreateReservation(Resource):
                 user_id=current_user.id,
                 spot_id=spot.id,
                 vehicle_number=vehicle_number,
-                status=ReservationStatus.ACTIVE.value
+                status=ReservationStatus.ACTIVE.value,
+                estimated_cost=lot.price_per_hour  # store initial estimate = 1 hour baseline
             )
             db.session.add(res)
             db.session.commit()
@@ -630,3 +631,51 @@ class UserReservations(Resource):
         return {'message': 'Reservations fetched', 'data': [serialize(r) for r in res_list]}, 200
 
 api.add_resource(UserReservations, '/api/user/reservations')
+
+# ------------------------ Admin: Reservations List (History) ------------------------
+class AdminReservationsAPI(Resource):
+    @jwt_required()
+    def get(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'admin':
+            return {'message': 'Admin access required'}, 403
+
+        # Optional filters: status, user_id, lot_id
+        status = request.args.get('status')
+        user_id = request.args.get('user_id', type=int)
+        lot_id = request.args.get('lot_id', type=int)
+
+        q = Reservation.query
+        if status:
+            q = q.filter(Reservation.status == status)
+        if user_id:
+            q = q.filter(Reservation.user_id == user_id)
+        if lot_id:
+            # join via ParkingSpot to lot
+            q = q.join(ParkingSpot, Reservation.spot_id == ParkingSpot.id).filter(ParkingSpot.lot_id == lot_id)
+
+        q = q.order_by(Reservation.created_at.desc())
+        reservations = q.all()
+
+        def serialize(r: Reservation):
+            spot = r.parking_spot
+            lot = spot.parking_lot if spot else None
+            user = r.user
+            return {
+                'id': r.id,
+                'user': {'id': user.id, 'username': user.username, 'full_name': user.full_name} if user else None,
+                'lot': {'id': lot.id, 'name': lot.prime_location_name, 'price_per_hour': lot.price_per_hour} if lot else None,
+                'spot': {'id': spot.id, 'spot_number': spot.spot_number} if spot else None,
+                'vehicle_number': r.vehicle_number,
+                'status': r.status,
+                'parking_timestamp': r.parking_timestamp.isoformat() if getattr(r, 'parking_timestamp', None) else None,
+                'leaving_timestamp': r.leaving_timestamp.isoformat() if r.leaving_timestamp else None,
+                'duration_hours': r.duration_hours,
+                'estimated_cost': r.estimated_cost,
+                'calculated_cost': r.calculated_cost,
+                'final_cost': r.final_cost,
+            }
+
+        return {'message': 'Reservations fetched', 'data': [serialize(r) for r in reservations]}, 200
+
+api.add_resource(AdminReservationsAPI, '/api/admin/reservations')
