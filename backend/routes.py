@@ -1,13 +1,38 @@
 from flask_restful import Api, Resource
-from flask import request, jsonify
+from flask import request, jsonify, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from models import db, User, ParkingLot, ParkingSpot, Reservation, SpotStatus, ReservationStatus
 from models import create_parking_spots_for_lot  # helper for initial spot generation
 from string import ascii_uppercase
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func
+import json
 
 api = Api()
+
+# Caching helpers
+def cache_get(key):
+    val = current_app.redis.get(key)
+    if val:
+        try:
+            return json.loads(val)
+        except Exception:
+            return None
+    return None
+
+def cache_set(key, data, ttl):
+    try:
+        current_app.redis.setex(key, ttl, json.dumps(data))
+    except Exception:
+        pass  # fail silently
+
+def cache_delete(*keys):
+    if not keys:
+        return
+    try:
+        current_app.redis.delete(*keys)
+    except Exception:
+        pass
 
 class HelloWorld(Resource):
     def get(self):
@@ -210,36 +235,33 @@ class UserDashboard(Resource):
 
 api.add_resource(UserDashboard, '/api/user/dashboard')
 
-# Public Routes
+# ------------------------ Public Routes (cached) ------------------------
 class ParkingLotsPublic(Resource):
     def get(self):
-        """Get all parking lots (public access)"""
+        cache_key = 'parking_lots_public'
+        cached = cache_get(cache_key)
+        if cached:
+            return cached, 200
         try:
             lots = ParkingLot.query.all()
-            lots_data = []
-            
-            for lot in lots:
-                lots_data.append({
-                    'id': lot.id,
-                    'prime_location_name': lot.prime_location_name,
-                    'address': lot.address,
-                    'pin_code': lot.pin_code,
-                    'price_per_hour': lot.price_per_hour,
-                    'maximum_spots': lot.maximum_spots,
-                    'available_spots': lot.available_spots_count,
-                    'occupied_spots': lot.occupied_spots_count
-                })
-            
-            return {
+            lots_data = [{
+                'id': lot.id,
+                'prime_location_name': lot.prime_location_name,
+                'address': lot.address,
+                'pin_code': lot.pin_code,
+                'price_per_hour': lot.price_per_hour,
+                'maximum_spots': lot.maximum_spots,
+                'available_spots': lot.available_spots_count,
+                'occupied_spots': lot.occupied_spots_count
+            } for lot in lots]
+            response = {
                 'message': 'Parking lots retrieved successfully',
                 'data': lots_data
-            }, 200
-            
+            }
+            cache_set(cache_key, response, current_app.config['LOTS_CACHE_TTL'])
+            return response, 200
         except Exception as e:
-            return {
-                'message': 'Failed to retrieve parking lots',
-                'error': str(e)
-            }, 500
+            return {'message': 'Failed to retrieve parking lots', 'error': str(e)}, 500
 
 api.add_resource(ParkingLotsPublic, '/api/parking-lots')
 
@@ -271,15 +293,18 @@ class DatabaseTest(Resource):
 
 api.add_resource(DatabaseTest, '/api/database/test')
 
-# ------------------------ Admin: Parking Lots CRUD ------------------------
+# ------------------------ Admin: Parking Lots CRUD (invalidate cache) ------------------------
 
 class AdminLotsAPI(Resource):
     @jwt_required()
     def get(self):
+        cache_key = 'admin_lots_list'
+        cached = cache_get(cache_key)
         current_user = User.query.filter_by(username=get_jwt_identity()).first()
         if not current_user or current_user.role != 'admin':
             return {'message': 'Admin access required'}, 403
-
+        if cached:
+            return cached, 200
         lots = ParkingLot.query.all()
         data = []
         for lot in lots:
@@ -294,7 +319,9 @@ class AdminLotsAPI(Resource):
                 'occupied_spots': lot.occupied_spots_count,
                 'created_at': lot.created_at.isoformat()
             })
-        return {'message': 'Lots fetched', 'data': data}, 200
+        response = {'message': 'Lots fetched', 'data': data}
+        cache_set(cache_key, response, current_app.config['LOTS_CACHE_TTL'])
+        return response, 200
 
     @jwt_required()
     def post(self):
@@ -324,6 +351,7 @@ class AdminLotsAPI(Resource):
             # Auto-create spots to match capacity
             create_parking_spots_for_lot(lot.id, lot.maximum_spots)
 
+            cache_delete('parking_lots_public', 'admin_lots_list', 'admin_analytics_overview')
             return {'message': 'Lot created', 'id': lot.id}, 201
         except Exception as e:
             db.session.rollback()
@@ -386,6 +414,7 @@ class AdminLotDetailAPI(Resource):
                     lot.maximum_spots = new_max
 
             db.session.commit()
+            cache_delete('parking_lots_public', 'admin_lots_list', 'admin_analytics_overview')
             return {'message': 'Lot updated'}, 200
         except Exception as e:
             db.session.rollback()
@@ -415,6 +444,7 @@ class AdminLotDetailAPI(Resource):
         try:
             db.session.delete(lot)
             db.session.commit()
+            cache_delete('parking_lots_public', 'admin_lots_list', 'admin_analytics_overview')
             return {'message': 'Lot deleted'}, 200
         except Exception as e:
             db.session.rollback()
@@ -522,6 +552,8 @@ class CreateReservation(Resource):
             db.session.add(res)
             db.session.commit()
 
+            cache_delete('parking_lots_public', 'admin_lots_list', 'admin_analytics_overview',
+                         f'user_analytics_overview:{current_user.username}')
             return {
                 'message': 'Reservation created',
                 'reservation': {
@@ -560,6 +592,8 @@ class ReleaseReservation(Resource):
         try:
             res.complete_reservation()  # sets leaving_timestamp, final_cost, frees spot
             db.session.commit()
+            cache_delete('parking_lots_public', 'admin_lots_list', 'admin_analytics_overview',
+                         f'user_analytics_overview:{res.user.username}')
             return {
                 'message': 'Reservation released',
                 'reservation': {
@@ -681,34 +715,29 @@ class AdminReservationsAPI(Resource):
 
 api.add_resource(AdminReservationsAPI, '/api/admin/reservations')
 
-# ------------------------ Admin Analytics ------------------------
+# ------------------------ Admin Analytics (cached) ------------------------
 class AdminAnalytics(Resource):
     @jwt_required()
     def get(self):
         current_user = User.query.filter_by(username=get_jwt_identity()).first()
         if not current_user or current_user.role != 'admin':
             return {'message': 'Admin access required'}, 403
-
+        cache_key = 'admin_analytics_overview'
+        cached = cache_get(cache_key)
+        if cached:
+            return cached, 200
+        # ...existing analytics computation (reuse previous logic)...
         lots = ParkingLot.query.all()
-        lot_names = []
-        occupancy_percent = []
-        revenue_by_lot = []
-        active_counts = []
-        completed_counts = []
-
+        lot_names, occupancy_percent, revenue_values, active_counts, completed_counts = [], [], [], [], []
         for lot in lots:
             lot_names.append(lot.prime_location_name)
-            occ = 0.0
-            if lot.maximum_spots > 0:
-                occ = round((lot.occupied_spots_count / lot.maximum_spots) * 100, 2)
+            occ = round((lot.occupied_spots_count / lot.maximum_spots) * 100, 2) if lot.maximum_spots else 0.0
             occupancy_percent.append(occ)
-
             completed_rev = db.session.query(func.coalesce(func.sum(Reservation.final_cost), 0.0)) \
                 .join(ParkingSpot, Reservation.spot_id == ParkingSpot.id) \
                 .filter(ParkingSpot.lot_id == lot.id,
                         Reservation.status == ReservationStatus.COMPLETED.value).scalar()
-            revenue_by_lot.append(float(completed_rev))
-
+            revenue_values.append(float(completed_rev))
             active_count = db.session.query(func.count(Reservation.id)) \
                 .join(ParkingSpot, Reservation.spot_id == ParkingSpot.id) \
                 .filter(ParkingSpot.lot_id == lot.id,
@@ -719,60 +748,63 @@ class AdminAnalytics(Resource):
                         Reservation.status == ReservationStatus.COMPLETED.value).scalar()
             active_counts.append(active_count)
             completed_counts.append(completed_count)
-
         total_completed_revenue = db.session.query(func.coalesce(func.sum(Reservation.final_cost), 0.0)) \
             .filter(Reservation.status == ReservationStatus.COMPLETED.value).scalar()
-
-        return {
+        response = {
             'message': 'Admin analytics overview',
             'data': {
                 'lots': lot_names,
                 'occupancy_percent': occupancy_percent,
-                'revenue_by_lot': revenue_by_lot,
+                'revenue_by_lot': revenue_values,
                 'active_reservations_by_lot': active_counts,
                 'completed_reservations_by_lot': completed_counts,
                 'total_completed_revenue': float(total_completed_revenue)
             }
-        }, 200
+        }
+        cache_set(cache_key, response, current_app.config['ANALYTICS_CACHE_TTL'])
+        return response, 200
 
 api.add_resource(AdminAnalytics, '/api/admin/analytics/overview')
 
-# ------------------------ User Analytics ------------------------
+# ------------------------ User Analytics (cached) ------------------------
 class UserAnalytics(Resource):
     @jwt_required()
     def get(self):
         current_user = User.query.filter_by(username=get_jwt_identity()).first()
         if not current_user or current_user.role != 'user':
             return {'message': 'User access required'}, 403
-
-        completed = Reservation.query.filter_by(
+        cache_key = f'user_analytics_overview:{current_user.username}'
+        cached = cache_get(cache_key)
+        if cached:
+            return cached, 200
+        completed_res = Reservation.query.filter_by(
             user_id=current_user.id,
             status=ReservationStatus.COMPLETED.value
         ).all()
-
-        usage = {}
+        usage_map = {}
         total_spent = 0.0
         total_hours = 0.0
-        for r in completed:
+        for r in completed_res:
             lot_name = r.parking_spot.parking_lot.prime_location_name
-            usage.setdefault(lot_name, {'count': 0, 'hours': 0.0, 'cost': 0.0})
-            usage[lot_name]['count'] += 1
-            usage[lot_name]['hours'] += r.duration_hours
-            usage[lot_name]['cost'] += (r.final_cost or 0.0)
+            usage_map.setdefault(lot_name, {'count': 0, 'hours': 0.0, 'cost': 0.0})
+            usage_map[lot_name]['count'] += 1
+            usage_map[lot_name]['hours'] += r.duration_hours
+            usage_map[lot_name]['cost'] += (r.final_cost or 0.0)
             total_spent += (r.final_cost or 0.0)
             total_hours += r.duration_hours
-
-        lots = list(usage.keys())
-        return {
+        lots = list(usage_map.keys())
+        response = {
             'message': 'User analytics overview',
             'data': {
                 'lots': lots,
-                'reservations_per_lot': [usage[n]['count'] for n in lots],
-                'hours_per_lot': [round(usage[n]['hours'], 2) for n in lots],
-                'cost_per_lot': [round(usage[n]['cost'], 2) for n in lots],
+                'reservations_per_lot': [usage_map[n]['count'] for n in lots],
+                'hours_per_lot': [round(usage_map[n]['hours'], 2) for n in lots],
+                'cost_per_lot': [round(usage_map[n]['cost'], 2) for n in lots],
                 'total_spent': round(total_spent, 2),
                 'total_hours': round(total_hours, 2)
             }
-        }, 200
+        }
+        cache_set(cache_key, response, current_app.config['ANALYTICS_CACHE_TTL'])
+        return response, 200
 
 api.add_resource(UserAnalytics, '/api/user/analytics/overview')

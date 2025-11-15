@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 import os
+import redis
 
 # Import models and routes
 from models import db, init_sample_data, Admin
@@ -20,11 +21,28 @@ def create_app():
     basedir = os.path.abspath(os.path.dirname(__file__))
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "parking_system.db")}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+    # Redis configuration
+    app.config.setdefault('REDIS_HOST', '127.0.0.1')
+    app.config.setdefault('REDIS_PORT', 6379)
+    app.config.setdefault('REDIS_DB', 0)
     
     # Initialize extensions
     db.init_app(app)
     JWTManager(app)
     api.init_app(app)
+
+    # Redis client
+    app.redis = redis.Redis(
+        host=app.config['REDIS_HOST'],
+        port=app.config['REDIS_PORT'],
+        db=app.config['REDIS_DB'],
+        decode_responses=True
+    )
+
+    # Cache TTLs (seconds)
+    app.config['LOTS_CACHE_TTL'] = 60
+    app.config['ANALYTICS_CACHE_TTL'] = 120
     
     return app
 
