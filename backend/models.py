@@ -135,6 +135,46 @@ class Reservation(db.Model):
     def __repr__(self):
         return f'<Reservation {self.id} - User {self.user.username}'
 
+class ExportJob(db.Model):
+    __tablename__ = 'export_jobs'
+    id = db.Column(db.Integer, primary_key=True)
+    job_type = db.Column(db.String(30), nullable=False)  # user_history | admin_all
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    status = db.Column(db.String(20), default='PENDING')  # PENDING | RUNNING | COMPLETED | FAILED
+    file_path = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    finished_at = db.Column(db.DateTime)
+
+    user = db.relationship('User', lazy=True)
+
+    def mark(self, status, path=None):
+        self.status = status
+        if status in ('COMPLETED', 'FAILED'):
+            self.finished_at = datetime.utcnow()
+        if path:
+            self.file_path = path
+
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    type = db.Column(db.String(20), nullable=False)  # REMINDER | REPORT
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    is_sent = db.Column(db.Boolean, default=False)
+    scheduled_time = db.Column(db.DateTime, default=datetime.utcnow)
+    sent_time = db.Column(db.DateTime)
+    file_path = db.Column(db.String(255))  # PDF path for reports
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', lazy=True)
+
+    def mark_sent(self, path=None):
+        self.is_sent = True
+        self.sent_time = datetime.utcnow()
+        if path:
+            self.file_path = path
+
 # Helper functions for database operations
 def create_parking_spots_for_lot(lot_id, max_spots):
     """Create parking spots for a parking lot"""

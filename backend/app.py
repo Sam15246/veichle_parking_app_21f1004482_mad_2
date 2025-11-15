@@ -7,6 +7,7 @@ import redis
 # Import models and routes
 from models import db, init_sample_data, Admin
 from routes import api
+from celery_app import make_celery
 
 def create_app():
     app = Flask(__name__)
@@ -27,10 +28,25 @@ def create_app():
     app.config.setdefault('REDIS_PORT', 6379)
     app.config.setdefault('REDIS_DB', 0)
     
+    # Celery configuration
+    app.config.setdefault('CELERY_BROKER_URL', f"redis://{app.config['REDIS_HOST']}:{app.config['REDIS_PORT']}/1")
+    app.config.setdefault('CELERY_RESULT_BACKEND', f"redis://{app.config['REDIS_HOST']}:{app.config['REDIS_PORT']}/2")
+    app.config['CELERY_BEAT_SCHEDULE'] = {
+        'daily-reminders': {
+            'task': 'tasks.send_daily_reminders',
+            'schedule': 60 * 60 * 24,  # every 24h (adjust in real env)
+        },
+        'monthly-reports': {
+            'task': 'tasks.generate_monthly_reports',
+            'schedule': 60 * 60 * 24,  # placeholder (should be cron on 1st)
+        }
+    }
+    
     # Initialize extensions
     db.init_app(app)
     JWTManager(app)
     api.init_app(app)
+    app.celery = make_celery(app)
 
     # Redis client
     app.redis = redis.Redis(

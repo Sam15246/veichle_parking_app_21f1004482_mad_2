@@ -1,12 +1,12 @@
 from flask_restful import Api, Resource
-from flask import request, jsonify, current_app
+from flask import request, jsonify, current_app, send_file
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
-from models import db, User, ParkingLot, ParkingSpot, Reservation, SpotStatus, ReservationStatus
+from models import db, User, ParkingLot, ParkingSpot, Reservation, SpotStatus, ReservationStatus, ExportJob
 from models import create_parking_spots_for_lot  # helper for initial spot generation
 from string import ascii_uppercase
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func
-import json
+import json, os
 
 api = Api()
 
@@ -808,3 +808,82 @@ class UserAnalytics(Resource):
         return response, 200
 
 api.add_resource(UserAnalytics, '/api/user/analytics/overview')
+
+# ------------------------ Data Export Endpoints ------------------------
+from models import ExportJob
+from tasks import export_user_history, export_admin_all
+import json, os
+
+class UserExportHistory(Resource):
+    @jwt_required()
+    def post(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'user':
+            return {'message': 'User access required'}, 403
+        job = ExportJob(job_type='user_history', user_id=current_user.id, status='PENDING')
+        db.session.add(job); db.session.commit()
+        export_user_history.delay(job.id)
+        return {'message': 'Export started', 'job_id': job.id}, 202
+
+class UserExportStatus(Resource):
+    @jwt_required()
+    def get(self, job_id):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        job = ExportJob.query.get(job_id)
+        if not job or job.user_id != current_user.id:
+            return {'message': 'Not found'}, 404
+        raw = current_app.redis.get(f"job:{job.id}")
+        data = json.loads(raw) if raw else {'status': job.status}
+        if job.status == 'COMPLETED' and job.file_path and os.path.isfile(job.file_path):
+            data['download'] = f"/api/user/export-history/{job.id}/download"
+        return {'job': data}, 200
+
+class UserExportDownload(Resource):
+    @jwt_required()
+    def get(self, job_id):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        job = ExportJob.query.get(job_id)
+        if not job or job.user_id != current_user.id or job.status != 'COMPLETED':
+            return {'message': 'Not available'}, 404
+        return send_file(job.file_path, as_attachment=True)
+
+api.add_resource(UserExportHistory, '/api/user/export-history')
+api.add_resource(UserExportStatus, '/api/user/export-history/<int:job_id>')
+api.add_resource(UserExportDownload, '/api/user/export-history/<int:job_id>/download')
+
+class AdminExportAll(Resource):
+    @jwt_required()
+    def post(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'admin':
+            return {'message': 'Admin access required'}, 403
+        job = ExportJob(job_type='admin_all', user_id=current_user.id, status='PENDING')
+        db.session.add(job); db.session.commit()
+        export_admin_all.delay(job.id)
+        return {'message': 'Admin export started', 'job_id': job.id}, 202
+
+class AdminExportStatus(Resource):
+    @jwt_required()
+    def get(self, job_id):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        job = ExportJob.query.get(job_id)
+        if not job or job.user_id != current_user.id:
+            return {'message': 'Not found'}, 404
+        raw = current_app.redis.get(f"job:{job.id}")
+        data = json.loads(raw) if raw else {'status': job.status}
+        if job.status == 'COMPLETED' and job.file_path and os.path.isfile(job.file_path):
+            data['download'] = f"/api/admin/export-all/{job.id}/download"
+        return {'job': data}, 200
+
+class AdminExportDownload(Resource):
+    @jwt_required()
+    def get(self, job_id):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        job = ExportJob.query.get(job_id)
+        if not job or job.user_id != current_user.id or job.status != 'COMPLETED':
+            return {'message': 'Not available'}, 404
+        return send_file(job.file_path, as_attachment=True)
+
+api.add_resource(AdminExportAll, '/api/admin/export-all')
+api.add_resource(AdminExportStatus, '/api/admin/export-all/<int:job_id>')
+api.add_resource(AdminExportDownload, '/api/admin/export-all/<int:job_id>/download')
