@@ -38,7 +38,7 @@ class ParkingLot(db.Model):
     __tablename__ = 'parking_lots'
     
     id = db.Column(db.Integer, primary_key=True)
-    prime_location_name = db.Column(db.String(100), nullable=False)
+    prime_location_name = db.Column(db.String(100), nullable=False, unique=True)  # added unique
     address = db.Column(db.Text, nullable=False)
     pin_code = db.Column(db.String(10), nullable=False)
     price_per_hour = db.Column(db.Float, nullable=False, default=20.0)
@@ -133,7 +133,7 @@ class Reservation(db.Model):
         self.parking_spot.status = SpotStatus.AVAILABLE.value
     
     def __repr__(self):
-        return f'<Reservation {self.id} - User {self.user.username}>'
+        return f'<Reservation {self.id} - User {self.user.username}'
 
 # Helper functions for database operations
 def create_parking_spots_for_lot(lot_id, max_spots):

@@ -31,7 +31,7 @@ This parking management system provides a complete solution for managing parking
 - [ ] Milestone 3: Admin Dashboard and Lot/Spot Management (20%)
 - [ ] Milestone 4: User Dashboard and Reservation System (15%)
 - [ ] Milestone 5: Reservation History and Cost Calculation (10%)
-- [ ] Milestone 6: Parking Analytics and Charts (10%)
+- [x] Milestone 6: Parking Analytics and Charts (10%)
 - [ ] Milestone 7: API Performance Optimization & Redis Caching (5%)
 - [ ] Milestone 8: Backend Jobs - Daily Reminders & Monthly Reports (10%)
 

@@ -185,6 +185,30 @@
         </div>
       </div>
 
+      <!-- User Analytics -->
+      <div class="card mb-4" v-if="uAnalytics.lots.length">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Your Parking Analytics</h5>
+          <small class="text-muted">Reservations & Spending</small>
+        </div>
+        <div class="card-body">
+          <div class="row gy-4">
+            <div class="col-md-6">
+              <h6 class="text-muted">Reservations per Lot</h6>
+              <canvas id="userUsageChart"></canvas>
+            </div>
+            <div class="col-md-6">
+              <h6 class="text-muted">Cost per Lot (₹)</h6>
+              <canvas id="userCostChart"></canvas>
+            </div>
+          </div>
+          <div class="mt-3">
+            <strong>Total Spent:</strong> ₹ {{ uAnalytics.total_spent }}
+            <span class="ms-3"><strong>Total Hours:</strong> {{ uAnalytics.total_hours }} h</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Quick Actions -->
       <div class="row">
         <div class="col">
@@ -256,6 +280,14 @@ const bookingLotId = ref(null)
 const releasing = ref(false)
 const actionMessage = ref('')
 const actionType = ref('success')
+const uAnalytics = ref({
+  lots: [],
+  reservations_per_lot: [],
+  hours_per_lot: [],
+  cost_per_lot: [],
+  total_spent: 0,
+  total_hours: 0
+})
 
 // Helpers
 const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` })
@@ -274,7 +306,8 @@ onMounted(async () => {
     loadDashboardData(),
     loadLots(),
     loadActiveReservation(),
-    loadHistory()
+    loadHistory(),
+    loadUserAnalytics()
   ])
 })
 
@@ -307,6 +340,12 @@ const loadActiveReservation = async () => {
 const loadHistory = async () => {
   const res = await axios.get('http://localhost:5000/api/user/reservations', { headers: authHeader() })
   history.value = res.data.data || []
+}
+
+const loadUserAnalytics = async () => {
+  const res = await axios.get('http://localhost:5000/api/user/analytics/overview', { headers: authHeader() })
+  uAnalytics.value = res.data.data
+  renderUserCharts()
 }
 
 // Actions
@@ -349,6 +388,43 @@ const releaseActive = async () => {
     actionType.value = 'error'
   } finally {
     releasing.value = false
+  }
+}
+
+const renderUserCharts = async () => {
+  const { Chart } = await import('chart.js/auto')
+
+  const usageCtx = document.getElementById('userUsageChart')
+  const costCtx = document.getElementById('userCostChart')
+
+  if (usageCtx) {
+    new Chart(usageCtx, {
+      type: 'bar',
+      data: {
+        labels: uAnalytics.value.lots,
+        datasets: [{
+          label: 'Reservations',
+            data: uAnalytics.value.reservations_per_lot,
+            backgroundColor: '#0d6efd'
+        }]
+      },
+      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+    })
+  }
+
+  if (costCtx) {
+    new Chart(costCtx, {
+      type: 'bar',
+      data: {
+        labels: uAnalytics.value.lots,
+        datasets: [{
+          label: 'Cost (₹)',
+          data: uAnalytics.value.cost_per_lot,
+          backgroundColor: '#dc3545'
+        }]
+      },
+      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+    })
   }
 }
 

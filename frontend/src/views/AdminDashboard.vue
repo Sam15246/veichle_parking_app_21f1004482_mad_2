@@ -267,6 +267,29 @@
         </div>
       </div>
 
+      <!-- Analytics -->
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Parking Analytics</h5>
+          <small class="text-muted">Occupancy & Revenue</small>
+        </div>
+        <div class="card-body">
+          <div class="row gy-4">
+            <div class="col-md-6">
+              <h6 class="text-muted">Occupancy (%)</h6>
+              <canvas id="adminOccupancyChart"></canvas>
+            </div>
+            <div class="col-md-6">
+              <h6 class="text-muted">Revenue (₹)</h6>
+              <canvas id="adminRevenueChart"></canvas>
+            </div>
+          </div>
+          <div class="mt-3">
+            <strong>Total Completed Revenue:</strong> ₹ {{ analytics.total_completed_revenue }}
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
@@ -299,6 +322,13 @@ const spotsSummary = ref({ available_spots: 0, occupied_spots: 0 })
 
 const users = ref([])
 const reservations = ref([])
+
+const analytics = ref({
+  lots: [],
+  occupancy_percent: [],
+  revenue_by_lot: [],
+  total_completed_revenue: 0
+})
 
 // Get user info from localStorage
 onMounted(async () => {
@@ -415,10 +445,43 @@ const loadReservations = async () => {
   reservations.value = res.data.data || []
 }
 
-// Enhance mounted to load lists too
+// Analytics
+const loadAnalytics = async () => {
+  const res = await axios.get('http://localhost:5000/api/admin/analytics/overview', { headers: authHeader() })
+  analytics.value = res.data.data
+  renderAnalyticsCharts()
+}
+
+const renderAnalyticsCharts = async () => {
+  const { Chart } = await import('chart.js/auto')
+  const occCtx = document.getElementById('adminOccupancyChart')
+  const revCtx = document.getElementById('adminRevenueChart')
+  if (occCtx) {
+    new Chart(occCtx, {
+      type: 'bar',
+      data: {
+        labels: analytics.value.lots,
+        datasets: [{ label: 'Occupancy %', data: analytics.value.occupancy_percent, backgroundColor: '#0d6efd' }]
+      },
+      options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
+    })
+  }
+  if (revCtx) {
+    new Chart(revCtx, {
+      type: 'bar',
+      data: {
+        labels: analytics.value.lots,
+        datasets: [{ label: 'Revenue (₹)', data: analytics.value.revenue_by_lot, backgroundColor: '#198754' }]
+      },
+      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+    })
+  }
+}
+
+// Extend mounted promise group
 onMounted(async () => {
   // ...existing auth + base stats...
-  await Promise.all([loadDashboardData(), loadLots(), loadUsers(), loadReservations()])
+  await Promise.all([loadDashboardData(), loadLots(), loadUsers(), loadReservations(), loadAnalytics()])
 })
 
 const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` })

@@ -5,6 +5,7 @@ from models import db, User, ParkingLot, ParkingSpot, Reservation, SpotStatus, R
 from models import create_parking_spots_for_lot  # helper for initial spot generation
 from string import ascii_uppercase
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import func
 
 api = Api()
 
@@ -679,3 +680,99 @@ class AdminReservationsAPI(Resource):
         return {'message': 'Reservations fetched', 'data': [serialize(r) for r in reservations]}, 200
 
 api.add_resource(AdminReservationsAPI, '/api/admin/reservations')
+
+# ------------------------ Admin Analytics ------------------------
+class AdminAnalytics(Resource):
+    @jwt_required()
+    def get(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'admin':
+            return {'message': 'Admin access required'}, 403
+
+        lots = ParkingLot.query.all()
+        lot_names = []
+        occupancy_percent = []
+        revenue_by_lot = []
+        active_counts = []
+        completed_counts = []
+
+        for lot in lots:
+            lot_names.append(lot.prime_location_name)
+            occ = 0.0
+            if lot.maximum_spots > 0:
+                occ = round((lot.occupied_spots_count / lot.maximum_spots) * 100, 2)
+            occupancy_percent.append(occ)
+
+            completed_rev = db.session.query(func.coalesce(func.sum(Reservation.final_cost), 0.0)) \
+                .join(ParkingSpot, Reservation.spot_id == ParkingSpot.id) \
+                .filter(ParkingSpot.lot_id == lot.id,
+                        Reservation.status == ReservationStatus.COMPLETED.value).scalar()
+            revenue_by_lot.append(float(completed_rev))
+
+            active_count = db.session.query(func.count(Reservation.id)) \
+                .join(ParkingSpot, Reservation.spot_id == ParkingSpot.id) \
+                .filter(ParkingSpot.lot_id == lot.id,
+                        Reservation.status == ReservationStatus.ACTIVE.value).scalar()
+            completed_count = db.session.query(func.count(Reservation.id)) \
+                .join(ParkingSpot, Reservation.spot_id == ParkingSpot.id) \
+                .filter(ParkingSpot.lot_id == lot.id,
+                        Reservation.status == ReservationStatus.COMPLETED.value).scalar()
+            active_counts.append(active_count)
+            completed_counts.append(completed_count)
+
+        total_completed_revenue = db.session.query(func.coalesce(func.sum(Reservation.final_cost), 0.0)) \
+            .filter(Reservation.status == ReservationStatus.COMPLETED.value).scalar()
+
+        return {
+            'message': 'Admin analytics overview',
+            'data': {
+                'lots': lot_names,
+                'occupancy_percent': occupancy_percent,
+                'revenue_by_lot': revenue_by_lot,
+                'active_reservations_by_lot': active_counts,
+                'completed_reservations_by_lot': completed_counts,
+                'total_completed_revenue': float(total_completed_revenue)
+            }
+        }, 200
+
+api.add_resource(AdminAnalytics, '/api/admin/analytics/overview')
+
+# ------------------------ User Analytics ------------------------
+class UserAnalytics(Resource):
+    @jwt_required()
+    def get(self):
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user or current_user.role != 'user':
+            return {'message': 'User access required'}, 403
+
+        completed = Reservation.query.filter_by(
+            user_id=current_user.id,
+            status=ReservationStatus.COMPLETED.value
+        ).all()
+
+        usage = {}
+        total_spent = 0.0
+        total_hours = 0.0
+        for r in completed:
+            lot_name = r.parking_spot.parking_lot.prime_location_name
+            usage.setdefault(lot_name, {'count': 0, 'hours': 0.0, 'cost': 0.0})
+            usage[lot_name]['count'] += 1
+            usage[lot_name]['hours'] += r.duration_hours
+            usage[lot_name]['cost'] += (r.final_cost or 0.0)
+            total_spent += (r.final_cost or 0.0)
+            total_hours += r.duration_hours
+
+        lots = list(usage.keys())
+        return {
+            'message': 'User analytics overview',
+            'data': {
+                'lots': lots,
+                'reservations_per_lot': [usage[n]['count'] for n in lots],
+                'hours_per_lot': [round(usage[n]['hours'], 2) for n in lots],
+                'cost_per_lot': [round(usage[n]['cost'], 2) for n in lots],
+                'total_spent': round(total_spent, 2),
+                'total_hours': round(total_hours, 2)
+            }
+        }, 200
+
+api.add_resource(UserAnalytics, '/api/user/analytics/overview')
