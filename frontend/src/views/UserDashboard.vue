@@ -1,32 +1,38 @@
 <template>
   <div class="container mt-4">
     <!-- Header -->
-    <div class="row mb-4">
+    <div class="row mb-3 align-items-center">
       <div class="col">
         <h2 class="text-primary">
           <i class="bi bi-person-circle"></i>
           User Dashboard
         </h2>
-        <p class="text-muted">Welcome back, {{ userFullName }}</p>
+        <p class="text-muted mb-0">Welcome back, {{ userFullName }}</p>
       </div>
-      <div class="col-auto">
+      <div class="col-auto d-flex gap-2">
+        <!-- New top action buttons -->
+        <button class="btn btn-outline-secondary" @click="scrollToLots">
+          <i class="bi bi-search"></i> Find Parking Spots
+        </button>
+        <button class="btn btn-outline-warning" @click="openProfileModal">
+          <i class="bi bi-person-gear"></i> Update Profile
+        </button>
         <button @click="logout" class="btn btn-outline-primary">
-          <i class="bi bi-box-arrow-right"></i>
-          Logout
+          <i class="bi bi-box-arrow-right"></i> Logout
         </button>
       </div>
     </div>
 
-    <!-- Loading State -->
+    <!-- Loading -->
     <div v-if="loading" class="text-center">
       <div class="spinner-border text-primary" role="status">
         <span class="visually-hidden">Loading...</span>
       </div>
     </div>
 
-    <!-- Dashboard Content -->
+    <!-- Content -->
     <div v-else>
-      <!-- User Statistics -->
+      <!-- Stats -->
       <div class="row mb-4">
         <div class="col-md-4 mb-3">
           <div class="card bg-primary text-white">
@@ -120,7 +126,7 @@
       </div>
 
       <!-- Available Lots (Book) -->
-      <div class="card mb-4">
+      <div class="card mb-4" id="lotsSection">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Available Parking Lots</h5>
           <small class="text-muted">Click Book to auto-allocate a spot</small>
@@ -229,52 +235,48 @@
         </div>
       </div>
 
-      <!-- Quick Actions -->
-      <div class="row">
-        <div class="col">
-          <div class="card">
-            <div class="card-header">
-              <h5 class="mb-0">Quick Actions</h5>
+      <!-- Profile Modal -->
+      <div class="modal fade" id="profileModal" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Update Profile</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="card-body">
-              <div class="row">
-                <div class="col-md-6 mb-3">
-                  <div class="d-grid">
-                    <button class="btn btn-primary">
-                      <i class="bi bi-search"></i>
-                      Find Parking Spots
-                    </button>
-                  </div>
-                </div>
-                <div class="col-md-6 mb-3">
-                  <div class="d-grid">
-                    <button class="btn btn-success">
-                      <i class="bi bi-plus-circle"></i>
-                      Book New Spot
-                    </button>
-                  </div>
-                </div>
-                <div class="col-md-6 mb-3">
-                  <div class="d-grid">
-                    <button class="btn btn-info">
-                      <i class="bi bi-clock-history"></i>
-                      View Booking History
-                    </button>
-                  </div>
-                </div>
-                <div class="col-md-6 mb-3">
-                  <div class="d-grid">
-                    <button class="btn btn-warning">
-                      <i class="bi bi-person-gear"></i>
-                      Update Profile
-                    </button>
-                  </div>
-                </div>
+            <div class="modal-body">
+              <div v-if="profileMessage" :class="['mb-2', profileMessageType==='error'?'text-danger':'text-success']">
+                {{ profileMessage }}
               </div>
+              <form @submit.prevent="saveProfile">
+                <div class="mb-3">
+                  <label class="form-label">Full Name</label>
+                  <input class="form-control" v-model="profileForm.full_name" required />
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Phone</label>
+                  <input class="form-control" v-model="profileForm.phone" />
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Address</label>
+                  <textarea class="form-control" rows="2" v-model="profileForm.address"></textarea>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">Pin Code</label>
+                  <input class="form-control" v-model="profileForm.pin_code" />
+                </div>
+                <div class="d-flex justify-content-end gap-2">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <button type="submit" class="btn btn-primary" :disabled="profileSaving">
+                    <span v-if="profileSaving" class="spinner-border spinner-border-sm me-1"></span>
+                    Save
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
       </div>
+
     </div>
   </div>
 </template>
@@ -308,6 +310,10 @@ const uAnalytics = ref({
   total_spent: 0,
   total_hours: 0
 })
+const profileForm = ref({ full_name: '', phone: '', address: '', pin_code: '' })
+const profileMessage = ref('')
+const profileMessageType = ref('success')
+const profileSaving = ref(false)
 
 // Helpers
 const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem('token')}` })
@@ -327,7 +333,8 @@ onMounted(async () => {
     loadLots(),
     loadActiveReservations(),
     loadHistory(),
-    loadUserAnalytics()
+    loadUserAnalytics(),
+    loadProfile()
   ])
 })
 
@@ -366,6 +373,21 @@ const loadUserAnalytics = async () => {
   const res = await axios.get('http://localhost:5000/api/user/analytics/overview', { headers: authHeader() })
   uAnalytics.value = res.data.data
   renderUserCharts()
+}
+
+const loadProfile = async () => {
+  try {
+    const res = await axios.get('http://localhost:5000/api/profile', { headers: authHeader() })
+    const u = res.data.user
+    profileForm.value = {
+      full_name: u.full_name || '',
+      phone: u.phone || '',
+      address: u.address || '',
+      pin_code: u.pin_code || ''
+    }
+  } catch (e) {
+    // ignore
+  }
 }
 
 // Actions
@@ -445,6 +467,41 @@ const renderUserCharts = async () => {
       options: { responsive: true, scales: { y: { beginAtZero: true } } }
     })
   }
+}
+
+// Open modal using Bootstrap
+const openProfileModal = () => {
+  profileMessage.value = ''
+  profileMessageType.value = 'success'
+  const modalEl = document.getElementById('profileModal')
+  if (!modalEl) return
+  const modal = new window.bootstrap.Modal(modalEl)
+  modal.show()
+}
+
+// Save profile
+const saveProfile = async () => {
+  profileSaving.value = true
+  profileMessage.value = ''
+  profileMessageType.value = 'success'
+  try {
+    await axios.put('http://localhost:5000/api/profile', profileForm.value, { headers: authHeader() })
+    profileMessage.value = 'Profile updated'
+    profileMessageType.value = 'success'
+    sessionStorage.setItem('userFullName', profileForm.value.full_name)
+    userFullName.value = profileForm.value.full_name
+  } catch (e) {
+    profileMessage.value = e?.response?.data?.message || 'Update failed'
+    profileMessageType.value = 'error'
+  } finally {
+    profileSaving.value = false
+  }
+}
+
+// Scroll to lots section
+const scrollToLots = () => {
+  const el = document.getElementById('lotsSection')
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 // Logout

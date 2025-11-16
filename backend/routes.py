@@ -10,7 +10,7 @@ import json, os
 
 api = Api()
 
-# Caching helpers
+# Caching helpers (safe when Redis is unavailable)
 def cache_get(key):
     r = getattr(current_app, 'redis', None)
     if not r:
@@ -177,6 +177,28 @@ class UserProfile(Resource):
             
         except Exception as e:
             return {'message': 'Failed to get user profile', 'error': str(e)}, 500
+
+    @jwt_required()
+    def put(self):
+        """Update current user profile (phone, address, pin_code, full_name)."""
+        current_user = User.query.filter_by(username=get_jwt_identity()).first()
+        if not current_user:
+            return {'message': 'User not found'}, 404
+        data = request.get_json() or {}
+        try:
+            if 'full_name' in data and data['full_name']:
+                current_user.full_name = data['full_name']
+            if 'phone' in data:
+                current_user.phone = data['phone']
+            if 'address' in data:
+                current_user.address = data['address']
+            if 'pin_code' in data:
+                current_user.pin_code = data['pin_code']
+            db.session.commit()
+            return {'message': 'Profile updated'}, 200
+        except Exception as e:
+            db.session.rollback()
+            return {'message': 'Update failed', 'error': str(e)}, 500
 
 api.add_resource(UserProfile, '/api/profile')
 

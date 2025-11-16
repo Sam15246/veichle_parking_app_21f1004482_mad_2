@@ -62,32 +62,57 @@ npm install
 npm run dev
 ```
 
-## 🧵 Background Workers (Celery)
+## 🔌 Redis Setup (Caching + Celery Broker)
 
-Start Redis (choose one):
+Options:
+- Local install (Linux/macOS): redis-server
+- Windows (recommended): Docker
+  - docker run -d -p 6379:6379 --name redis redis:7-alpine
+- Windows (native): Memurai or Redis for Windows ports
+
+Environment variables (optional):
 ```bash
-redis-server                # if installed locally
-# OR via Docker
+# Single URL to drive app Redis + Celery (uses DB 0/1/2 automatically)
+set REDIS_URL=redis://127.0.0.1:6379/0
+# Optional overrides
+set CELERY_BROKER_URL=redis://127.0.0.1:6379/1
+set CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/2
+# Tuning
+set LOTS_CACHE_TTL=60
+set ANALYTICS_CACHE_TTL=120
+set MAX_ACTIVE_RESERVATIONS_PER_USER=5
+```
+
+## 🧵 Celery Workers + Beat
+
+Start API (creates DB on first run):
+```bash
+python backend/app.py
+```
+
+Start Redis (if not already):
+```bash
+redis-server
+# or Docker:
 docker run -d -p 6379:6379 --name redis redis:7-alpine
 ```
 
-Start worker (Windows recommended --pool solo to avoid spawn issues):
+Start Celery worker and beat (Windows: prefer solo pool):
 ```bash
+cd backend
 celery -A celery_worker.celery worker -l info --pool solo
 celery -A celery_worker.celery beat -l info
 ```
 
-Error 10061 = Redis server not running or port blocked (ensure 6379 reachable).
+Verify:
+- API health: GET http://localhost:5000/health
+- Ops status: GET http://localhost:5000/ops/status (redis.enabled should be true)
+- Caching: call GET /api/parking-lots twice (second should be faster; cache invalidates on lot/reservation mutations)
+- Tasks: daily/monthly scheduled by Celery beat (18:00 daily, 1st of month 08:00)
 
-Common error:
-```text
-AttributeError: 'function' object has no attribute 'user_options'
-```
-Cause: Used wrong command:
-```bash
-celery -A celery_app.make_celery worker -l info   # WRONG
-```
-Fix: Use the provided celery_worker.celery target (it exposes a Celery instance).
+Common issues:
+- Error 10061 (Windows): Redis not running or blocked; start Redis or use Docker.
+- AttributeError user_options: use celery -A celery_worker.celery ... (not the factory).
 
 ## 🛠️ Technology Stack
 
@@ -121,4 +146,3 @@ Fix: Use the provided celery_worker.celery target (it exposes a Celery instance)
 ## 📄 License
 
 This project is developed as part of academic coursework for IIT Madras MAD II course.
----
