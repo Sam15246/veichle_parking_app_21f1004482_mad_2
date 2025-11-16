@@ -290,18 +290,18 @@ const uAnalytics = ref({
 })
 
 // Helpers
-const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` })
+const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem('token')}` })
 const formatDate = (iso) => iso ? new Date(iso).toLocaleString() : '-'
 
 // Mounted
 onMounted(async () => {
-  const token = localStorage.getItem('token')
-  const userRole = localStorage.getItem('userRole')
+  const token = sessionStorage.getItem('token')
+  const userRole = sessionStorage.getItem('userRole')
   if (!token || userRole !== 'user') {
     router.push('/login')
     return
   }
-  userFullName.value = localStorage.getItem('userFullName') || 'User'
+  userFullName.value = sessionStorage.getItem('userFullName') || 'User'
   await Promise.all([
     loadDashboardData(),
     loadLots(),
@@ -314,7 +314,7 @@ onMounted(async () => {
 // Existing stats
 const loadDashboardData = async () => {
   try {
-    const token = localStorage.getItem('token')
+    const token = sessionStorage.getItem('token')
     const response = await axios.get('http://localhost:5000/api/user/dashboard', {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -430,11 +430,8 @@ const renderUserCharts = async () => {
 
 // Logout
 const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('userId')
-  localStorage.removeItem('username')
-  localStorage.removeItem('userRole')
-  localStorage.removeItem('userFullName')
+  sessionStorage.clear()
+  localStorage.clear()
   router.push('/login')
 }
 </script>

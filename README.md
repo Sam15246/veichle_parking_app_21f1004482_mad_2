@@ -62,6 +62,33 @@ npm install
 npm run dev
 ```
 
+## 🧵 Background Workers (Celery)
+
+Start Redis (choose one):
+```bash
+redis-server                # if installed locally
+# OR via Docker
+docker run -d -p 6379:6379 --name redis redis:7-alpine
+```
+
+Start worker (Windows recommended --pool solo to avoid spawn issues):
+```bash
+celery -A celery_worker.celery worker -l info --pool solo
+celery -A celery_worker.celery beat -l info
+```
+
+Error 10061 = Redis server not running or port blocked (ensure 6379 reachable).
+
+Common error:
+```text
+AttributeError: 'function' object has no attribute 'user_options'
+```
+Cause: Used wrong command:
+```bash
+celery -A celery_app.make_celery worker -l info   # WRONG
+```
+Fix: Use the provided celery_worker.celery target (it exposes a Celery instance).
+
 ## 🛠️ Technology Stack
 
 **Backend:**

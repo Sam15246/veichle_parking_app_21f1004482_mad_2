@@ -48,13 +48,18 @@ def create_app():
     api.init_app(app)
     app.celery = make_celery(app)
 
-    # Redis client
-    app.redis = redis.Redis(
-        host=app.config['REDIS_HOST'],
-        port=app.config['REDIS_PORT'],
-        db=app.config['REDIS_DB'],
-        decode_responses=True
-    )
+    # Redis client (graceful fallback)
+    try:
+        app.redis = redis.Redis(
+            host=app.config['REDIS_HOST'],
+            port=app.config['REDIS_PORT'],
+            db=app.config['REDIS_DB'],
+            decode_responses=True
+        )
+        app.redis.ping()  # test connection
+    except Exception as e:
+        app.redis = None
+        print(f"[WARN] Redis not available, caching disabled. Reason: {e}")
 
     # Cache TTLs (seconds)
     app.config['LOTS_CACHE_TTL'] = 60

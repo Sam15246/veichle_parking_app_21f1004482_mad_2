@@ -5,6 +5,27 @@ import RegisterView from '../views/RegisterView.vue'
 import AdminDashboard from '../views/AdminDashboard.vue'
 import UserDashboard from '../views/UserDashboard.vue'
 
+// Helper: per-tab auth with safe migration from localStorage
+function getAuth() {
+  let token = sessionStorage.getItem('token')
+  let userRole = sessionStorage.getItem('userRole')
+  if (!token) {
+    const lt = localStorage.getItem('token')
+    const lr = localStorage.getItem('userRole')
+    const uid = localStorage.getItem('userId')
+    const un = localStorage.getItem('username')
+    const fn = localStorage.getItem('userFullName')
+    if (lt) sessionStorage.setItem('token', lt)
+    if (lr) sessionStorage.setItem('userRole', lr)
+    if (uid) sessionStorage.setItem('userId', uid)
+    if (un) sessionStorage.setItem('username', un)
+    if (fn) sessionStorage.setItem('userFullName', fn)
+    token = lt
+    userRole = lr
+  }
+  return { token, userRole }
+}
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -43,35 +64,19 @@ const router = createRouter({
   ]
 })
 
-// Navigation guards for authentication
+// Navigation guards for authentication (sessionStorage first)
 router.beforeEach((to) => {
-  const token = localStorage.getItem('token')
-  const userRole = localStorage.getItem('userRole')
+  const { token, userRole } = getAuth()
 
-  // Check if route requires authentication
   if (to.meta.requiresAuth) {
-    if (!token) {
-      return '/login'
-    }
-
-    // Check role-based access
+    if (!token) return '/login'
     if (to.meta.role && to.meta.role !== userRole) {
-      // Redirect to appropriate dashboard based on user role
-      if (userRole === 'admin') {
-        return '/admin/dashboard'
-      } else {
-        return '/user/dashboard'
-      }
+      return userRole === 'admin' ? '/admin/dashboard' : '/user/dashboard'
     }
   }
 
-  // Redirect authenticated users away from login/register pages
   if (token && (to.name === 'login' || to.name === 'register')) {
-    if (userRole === 'admin') {
-      return '/admin/dashboard'
-    } else {
-      return '/user/dashboard'
-    }
+    return userRole === 'admin' ? '/admin/dashboard' : '/user/dashboard'
   }
 
   return true

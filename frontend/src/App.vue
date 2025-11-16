@@ -14,14 +14,26 @@ onMounted(() => {
 })
 
 const initializeAuth = () => {
-  const token = localStorage.getItem('token')
-  const role = localStorage.getItem('userRole')
-  const user = localStorage.getItem('username')
-  
+  // Migrate once from localStorage if sessionStorage is empty
+  if (!sessionStorage.getItem('token') && localStorage.getItem('token')) {
+    const keys = ['token', 'userRole', 'userId', 'username', 'userFullName']
+    keys.forEach(k => {
+      const v = localStorage.getItem(k)
+      if (v) sessionStorage.setItem(k, v)
+    })
+  }
+  const token = sessionStorage.getItem('token')
+  const role = sessionStorage.getItem('userRole')
+  const user = sessionStorage.getItem('username')
+
   if (token && role && user) {
     isLoggedIn.value = true
     userRole.value = role
     username.value = user
+  } else {
+    isLoggedIn.value = false
+    userRole.value = ''
+    username.value = ''
   }
 }
 </script>

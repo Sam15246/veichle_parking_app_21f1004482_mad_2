@@ -330,36 +330,26 @@ const analytics = ref({
   total_completed_revenue: 0
 })
 
-// Get user info from localStorage
+// Get user info from storage (per-tab)
 onMounted(async () => {
-  // Check authentication
-  const token = localStorage.getItem('token')
-  const userRole = localStorage.getItem('userRole')
-  
+  const token = sessionStorage.getItem('token')
+  const userRole = sessionStorage.getItem('userRole')
   if (!token || userRole !== 'admin') {
     router.push('/login')
     return
   }
-
-  userFullName.value = localStorage.getItem('userFullName') || 'Admin'
-  
-  // Load dashboard data
+  userFullName.value = sessionStorage.getItem('userFullName') || 'Admin'
   await loadDashboardData()
 })
 
 // Load dashboard data
 const loadDashboardData = async () => {
   try {
-    const token = localStorage.getItem('token')
-    
+    const token = sessionStorage.getItem('token')
     const response = await axios.get('http://localhost:5000/api/admin/dashboard', {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      headers: { Authorization: `Bearer ${token}` }
     })
-    
     statistics.value = response.data.statistics
-    
   } catch (error) {
     console.error('Failed to load dashboard data:', error)
     if (error.response?.status === 401 || error.response?.status === 403) {
@@ -372,11 +362,9 @@ const loadDashboardData = async () => {
 
 // Logout function
 const logout = () => {
-  localStorage.removeItem('token')
-  localStorage.removeItem('userId')
-  localStorage.removeItem('username')
-  localStorage.removeItem('userRole')
-  localStorage.removeItem('userFullName')
+  // Clear both session and local to be safe
+  sessionStorage.clear()
+  localStorage.clear()
   router.push('/login')
 }
 
@@ -484,7 +472,7 @@ onMounted(async () => {
   await Promise.all([loadDashboardData(), loadLots(), loadUsers(), loadReservations(), loadAnalytics()])
 })
 
-const authHeader = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` })
+const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem('token')}` })
 const formatDate = (iso) => iso ? new Date(iso).toLocaleString() : '-'
 </script>
 

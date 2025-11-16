@@ -133,7 +133,7 @@ class Reservation(db.Model):
         self.parking_spot.status = SpotStatus.AVAILABLE.value
     
     def __repr__(self):
-        return f'<Reservation {self.id} - User {self.user.username}'
+        return f'<Reservation {self.id} - User {self.user.username}>'
 
 class ExportJob(db.Model):
     __tablename__ = 'export_jobs'
@@ -174,6 +174,19 @@ class Notification(db.Model):
         self.sent_time = datetime.utcnow()
         if path:
             self.file_path = path
+
+# Helper to create notification (used by Celery tasks)
+def create_notification(user_id, n_type, title, message, file_path=None):
+    note = Notification(
+        user_id=user_id,
+        type=n_type,
+        title=title,
+        message=message,
+        file_path=file_path,
+        scheduled_time=datetime.utcnow()
+    )
+    db.session.add(note)
+    return note
 
 # Helper functions for database operations
 def create_parking_spots_for_lot(lot_id, max_spots):

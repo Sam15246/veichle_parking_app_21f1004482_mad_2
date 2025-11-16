@@ -15,4 +15,4 @@ def make_celery(flask_app):
                 return super().__call__(*args, **kwargs)
 
     celery.Task = ContextTask
-    return celery
+    return celery  # Use app.celery (created in app.py), not this factory in -A argument.

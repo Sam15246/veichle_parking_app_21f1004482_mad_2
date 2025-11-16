@@ -12,25 +12,30 @@ api = Api()
 
 # Caching helpers
 def cache_get(key):
-    val = current_app.redis.get(key)
-    if val:
-        try:
-            return json.loads(val)
-        except Exception:
-            return None
-    return None
+    r = getattr(current_app, 'redis', None)
+    if not r:
+        return None
+    try:
+        val = r.get(key)
+        return json.loads(val) if val else None
+    except Exception:
+        return None
 
 def cache_set(key, data, ttl):
-    try:
-        current_app.redis.setex(key, ttl, json.dumps(data))
-    except Exception:
-        pass  # fail silently
-
-def cache_delete(*keys):
-    if not keys:
+    r = getattr(current_app, 'redis', None)
+    if not r:
         return
     try:
-        current_app.redis.delete(*keys)
+        r.setex(key, ttl, json.dumps(data))
+    except Exception:
+        pass
+
+def cache_delete(*keys):
+    r = getattr(current_app, 'redis', None)
+    if not r or not keys:
+        return
+    try:
+        r.delete(*keys)
     except Exception:
         pass
 
@@ -91,10 +96,12 @@ class UserLogin(Resource):
         if not data or 'username' not in data or 'password' not in data:
             return {'message': 'Username and password required'}, 400
         
-        user = User.query.filter_by(username=data['username']).first()
-        
+        # Enforce user-only login here (admins must use /api/admin/login)
+        user = User.query.filter_by(username=data['username'], role='user').first()
         if not user or not check_password_hash(user.password, data['password']):  # verify hash
-            return {'message': 'Invalid credentials'}, 401
+            return {
+                'message': 'Invalid credentials for user login. If you are admin, use /api/admin/login'
+            }, 401
         
         # Create access token
         token = create_access_token(identity=user.username)
