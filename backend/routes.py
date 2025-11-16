@@ -502,15 +502,21 @@ class AdminUsersAPI(Resource):
         users = User.query.all()
         data = []
         for u in users:
-            active_res = Reservation.query.filter_by(user_id=u.id, status=ReservationStatus.ACTIVE.value).first()
+            active_list = Reservation.query.filter_by(
+                user_id=u.id,
+                status=ReservationStatus.ACTIVE.value
+            ).all()
+            spots = [r.parking_spot.spot_number for r in active_list if r.parking_spot]
+            lots = [r.parking_spot.parking_lot.prime_location_name for r in active_list if r.parking_spot]
             data.append({
                 'id': u.id,
                 'username': u.username,
                 'email': u.email,
                 'full_name': u.full_name,
                 'role': u.role,
-                'active_spot_number': active_res.parking_spot.spot_number if active_res else None,
-                'active_lot': active_res.parking_spot.parking_lot.prime_location_name if active_res else None
+                'active_reservations_count': len(active_list),
+                'active_spots': spots,
+                'active_lots': lots
             })
         return {'message': 'Users fetched', 'data': data}, 200
 
@@ -524,24 +530,25 @@ class CreateReservation(Resource):
         current_user = User.query.filter_by(username=get_jwt_identity()).first()
         if not current_user:
             return {'message': 'User not found'}, 404
-
         data = request.get_json() or {}
         lot_id = data.get('lot_id')
         vehicle_number = data.get('vehicle_number')
-
         if not lot_id or not vehicle_number:
             return {'message': 'lot_id and vehicle_number are required'}, 400
 
-        # One active reservation per user
-        active = Reservation.query.filter_by(user_id=current_user.id, status=ReservationStatus.ACTIVE.value).first()
-        if active:
-            return {'message': 'You already have an active reservation'}, 400
+        # NEW: enforce configurable max active reservations instead of single reservation
+        active_count = Reservation.query.filter_by(
+            user_id=current_user.id,
+            status=ReservationStatus.ACTIVE.value
+        ).count()
+        limit = current_app.config.get('MAX_ACTIVE_RESERVATIONS_PER_USER', 5)
+        if active_count >= limit:
+            return {'message': f'Max active reservations ({limit}) reached'}, 400
 
         lot = ParkingLot.query.get(lot_id)
         if not lot:
             return {'message': 'Parking lot not found'}, 404
 
-        # First available spot in lot
         spot = ParkingSpot.query.filter_by(lot_id=lot_id, status=SpotStatus.AVAILABLE.value)\
                                 .order_by(ParkingSpot.spot_number.asc()).first()
         if not spot:
@@ -554,11 +561,9 @@ class CreateReservation(Resource):
                 spot_id=spot.id,
                 vehicle_number=vehicle_number,
                 status=ReservationStatus.ACTIVE.value,
-                estimated_cost=lot.price_per_hour  # store initial estimate = 1 hour baseline
+                estimated_cost=lot.price_per_hour  # first hour minimum charge
             )
-            db.session.add(res)
-            db.session.commit()
-
+            db.session.add(res); db.session.commit()
             cache_delete('parking_lots_public', 'admin_lots_list', 'admin_analytics_overview',
                          f'user_analytics_overview:{current_user.username}')
             return {
@@ -568,6 +573,8 @@ class CreateReservation(Resource):
                     'vehicle_number': res.vehicle_number,
                     'status': res.status,
                     'parking_timestamp': res.parking_timestamp.isoformat(),
+                    'billed_hours': res.billed_hours,
+                    'estimated_first_hour_cost': lot.price_per_hour,
                     'spot': {'id': spot.id, 'spot_number': spot.spot_number},
                     'lot': {'id': lot.id, 'name': lot.prime_location_name, 'price_per_hour': lot.price_per_hour}
                 }
@@ -597,7 +604,7 @@ class ReleaseReservation(Resource):
             return {'message': 'Reservation already completed or cancelled'}, 400
 
         try:
-            res.complete_reservation()  # sets leaving_timestamp, final_cost, frees spot
+            res.complete_reservation()
             db.session.commit()
             cache_delete('parking_lots_public', 'admin_lots_list', 'admin_analytics_overview',
                          f'user_analytics_overview:{res.user.username}')
@@ -607,6 +614,7 @@ class ReleaseReservation(Resource):
                     'id': res.id,
                     'status': res.status,
                     'leaving_timestamp': res.leaving_timestamp.isoformat(),
+                    'billed_hours': res.billed_hours,
                     'final_cost': res.final_cost
                 }
             }, 200
@@ -616,34 +624,40 @@ class ReleaseReservation(Resource):
 
 api.add_resource(ReleaseReservation, '/api/reservations/<int:reservation_id>/release')
 
-class ActiveReservation(Resource):
+# REPLACED: ActiveReservation -> ActiveReservations (returns list)
+class ActiveReservations(Resource):
     @jwt_required()
     def get(self):
         current_user = User.query.filter_by(username=get_jwt_identity()).first()
         if not current_user:
             return {'message': 'User not found'}, 404
+        active_list = Reservation.query.filter_by(
+            user_id=current_user.id,
+            status=ReservationStatus.ACTIVE.value
+        ).order_by(Reservation.parking_timestamp.asc()).all()
 
-        res = Reservation.query.filter_by(user_id=current_user.id, status=ReservationStatus.ACTIVE.value).first()
-        if not res:
-            return {'message': 'No active reservation', 'reservation': None}, 200
-
-        spot = res.parking_spot
-        lot = spot.parking_lot
-        return {
-            'message': 'Active reservation fetched',
-            'reservation': {
-                'id': res.id,
-                'vehicle_number': res.vehicle_number,
-                'status': res.status,
-                'parking_timestamp': res.parking_timestamp.isoformat(),
-                'duration_hours': res.duration_hours,
-                'calculated_cost': res.calculated_cost,
+        def serialize(r: Reservation):
+            spot = r.parking_spot
+            lot = spot.parking_lot
+            return {
+                'id': r.id,
+                'vehicle_number': r.vehicle_number,
+                'status': r.status,
+                'parking_timestamp': r.parking_timestamp.isoformat(),
+                'duration_hours': r.duration_hours,
+                'billed_hours': r.billed_hours,
+                'calculated_cost': r.calculated_cost,
                 'spot': {'id': spot.id, 'spot_number': spot.spot_number},
                 'lot': {'id': lot.id, 'name': lot.prime_location_name, 'price_per_hour': lot.price_per_hour}
             }
+
+        return {
+            'message': 'Active reservations fetched',
+            'reservations': [serialize(r) for r in active_list]
         }, 200
 
-api.add_resource(ActiveReservation, '/api/user/reservations/active')
+# Update resource registration (same endpoint path)
+api.add_resource(ActiveReservations, '/api/user/reservations/active')
 
 class UserReservations(Resource):
     @jwt_required()
@@ -664,6 +678,7 @@ class UserReservations(Resource):
                 'parking_timestamp': r.parking_timestamp.isoformat() if r.parking_timestamp else None,
                 'leaving_timestamp': r.leaving_timestamp.isoformat() if r.leaving_timestamp else None,
                 'duration_hours': r.duration_hours,
+                'billed_hours': r.billed_hours,
                 'final_cost': r.final_cost,
                 'calculated_cost': r.calculated_cost,
                 'spot': {'id': spot.id, 'spot_number': spot.spot_number} if spot else None,
@@ -710,9 +725,10 @@ class AdminReservationsAPI(Resource):
                 'spot': {'id': spot.id, 'spot_number': spot.spot_number} if spot else None,
                 'vehicle_number': r.vehicle_number,
                 'status': r.status,
-                'parking_timestamp': r.parking_timestamp.isoformat() if getattr(r, 'parking_timestamp', None) else None,
+                'parking_timestamp': r.parking_timestamp.isoformat() if r.parking_timestamp else None,
                 'leaving_timestamp': r.leaving_timestamp.isoformat() if r.leaving_timestamp else None,
                 'duration_hours': r.duration_hours,
+                'billed_hours': r.billed_hours,
                 'estimated_cost': r.estimated_cost,
                 'calculated_cost': r.calculated_cost,
                 'final_cost': r.final_cost,

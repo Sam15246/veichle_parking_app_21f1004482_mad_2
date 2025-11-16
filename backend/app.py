@@ -64,6 +64,7 @@ def create_app():
     # Cache TTLs (seconds)
     app.config['LOTS_CACHE_TTL'] = 60
     app.config['ANALYTICS_CACHE_TTL'] = 120
+    app.config['MAX_ACTIVE_RESERVATIONS_PER_USER'] = 5  # new: configurable per user
     
     return app
 

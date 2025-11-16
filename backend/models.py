@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from enum import Enum
 from werkzeug.security import generate_password_hash
+import math
 
 db = SQLAlchemy()
 
@@ -118,15 +119,23 @@ class Reservation(db.Model):
             return round(duration.total_seconds() / 3600, 2)
     
     @property
+    def billed_hours(self):
+        """Whole hours billed: minimum 1, every started hour counts fully."""
+        end = self.leaving_timestamp or datetime.utcnow()
+        raw_seconds = max(0, (end - self.parking_timestamp).total_seconds())
+        hours = raw_seconds / 3600.0
+        return max(1, math.ceil(hours))
+
+    @property
     def calculated_cost(self):
-        """Calculate cost based on duration and lot price"""
+        """Cost = billed_hours * price_per_hour (minimum one hour)."""
         if hasattr(self.parking_spot, 'parking_lot'):
-            price_per_hour = self.parking_spot.parking_lot.price_per_hour
-            return round(self.duration_hours * price_per_hour, 2)
+            rate = self.parking_spot.parking_lot.price_per_hour
+            return round(self.billed_hours * rate, 2)
         return 0.0
     
     def complete_reservation(self):
-        """Mark reservation as completed and update spot status"""
+        """Finalize with billed hours cost rule."""
         self.leaving_timestamp = datetime.utcnow()
         self.final_cost = self.calculated_cost
         self.status = ReservationStatus.COMPLETED.value

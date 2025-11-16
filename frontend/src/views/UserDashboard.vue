@@ -77,25 +77,44 @@
         </div>
       </div>
 
-      <!-- Active Parking -->
-      <div class="card mb-4" v-if="activeReservation">
+      <!-- Active Parkings (multiple) -->
+      <div class="card mb-4" v-if="activeReservations.length">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">Active Parking</h5>
-          <button class="btn btn-sm btn-outline-danger" @click="releaseActive" :disabled="releasing">
-            <span v-if="releasing" class="spinner-border spinner-border-sm me-1"></span>
-            Release
-          </button>
+          <h5 class="mb-0">Active Parkings ({{ activeReservations.length }})</h5>
+          <small class="text-muted">You can have multiple active reservations</small>
         </div>
         <div class="card-body">
-          <div class="row gy-2">
-            <div class="col-md-3"><strong>Lot:</strong> {{ activeReservation.lot.name }}</div>
-            <div class="col-md-3"><strong>Spot:</strong> {{ activeReservation.spot.spot_number }}</div>
-            <div class="col-md-3"><strong>Vehicle:</strong> {{ activeReservation.vehicle_number }}</div>
-            <div class="col-md-3"><strong>Since:</strong> {{ formatDate(activeReservation.parking_timestamp) }}</div>
-          </div>
-          <div class="mt-2">
-            <strong>Duration:</strong> {{ activeReservation.duration_hours }} h
-            <span class="ms-3"><strong>Est. Cost:</strong> ₹ {{ activeReservation.calculated_cost }}</span>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped align-middle">
+              <thead>
+                <tr>
+                  <th>#</th><th>Lot</th><th>Spot</th><th>Vehicle</th><th>Since</th><th>Duration (h)</th><th>Billed (h)</th><th>Est. Cost</th><th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in activeReservations" :key="r.id">
+                  <td>{{ r.id }}</td>
+                  <td>{{ r.lot.name }}</td>
+                  <td>{{ r.spot.spot_number }}</td>
+                  <td>{{ r.vehicle_number }}</td>
+                  <td>{{ formatDate(r.parking_timestamp) }}</td>
+                  <td>{{ r.duration_hours }}</td>
+                  <td>{{ r.billed_hours }}</td>
+                  <td>₹ {{ r.calculated_cost }}</td>
+                  <td>
+                    <button class="btn btn-sm btn-outline-danger"
+                            :disabled="releasingId===r.id"
+                            @click="releaseReservation(r)">
+                      <span v-if="releasingId===r.id" class="spinner-border spinner-border-sm me-1"></span>
+                      Release
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="activeReservations.length===0">
+                  <td colspan="9" class="text-center text-muted">No active reservations</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -126,9 +145,9 @@
                   </td>
                   <td>
                     <button class="btn btn-sm btn-primary"
-                            :disabled="booking || !!activeReservation || lot.available_spots===0"
+                            :disabled="bookingLotId===lot.id || lot.available_spots===0"
                             @click="bookLot(lot)">
-                      <span v-if="bookingLotId===lot.id && booking" class="spinner-border spinner-border-sm me-1"></span>
+                      <span v-if="bookingLotId===lot.id" class="spinner-border spinner-border-sm me-1"></span>
                       Book
                     </button>
                   </td>
@@ -156,7 +175,7 @@
               <thead>
                 <tr>
                   <th>#</th><th>Lot</th><th>Spot</th><th>Vehicle</th>
-                  <th>Start</th><th>End</th><th>Duration (h)</th><th>Status</th><th>Cost</th>
+                  <th>Start</th><th>End</th><th>Duration (h)</th><th>Billed (h)</th><th>Status</th><th>Cost</th>
                 </tr>
               </thead>
               <tbody>
@@ -168,6 +187,7 @@
                   <td>{{ formatDate(r.parking_timestamp) }}</td>
                   <td>{{ r.leaving_timestamp ? formatDate(r.leaving_timestamp) : '-' }}</td>
                   <td>{{ r.duration_hours }}</td>
+                  <td>{{ r.billed_hours }}</td>
                   <td>
                     <span class="badge"
                           :class="r.status==='COMPLETED'?'bg-success':(r.status==='ACTIVE'?'bg-primary':'bg-secondary')">
@@ -177,7 +197,7 @@
                   <td>₹ {{ r.final_cost ?? r.calculated_cost }}</td>
                 </tr>
                 <tr v-if="history.length===0">
-                  <td colspan="9" class="text-center text-muted">No reservations yet</td>
+                  <td colspan="10" class="text-center text-muted">No reservations yet</td>
                 </tr>
               </tbody>
             </table>
@@ -273,11 +293,11 @@ const userStats = ref({ total_reservations: 0, active_reservations: 0, available
 
 // New state
 const lots = ref([])
-const activeReservation = ref(null)
+const activeReservations = ref([])
 const history = ref([])
 const booking = ref(false)
 const bookingLotId = ref(null)
-const releasing = ref(false)
+const releasingId = ref(null)
 const actionMessage = ref('')
 const actionType = ref('success')
 const uAnalytics = ref({
@@ -305,7 +325,7 @@ onMounted(async () => {
   await Promise.all([
     loadDashboardData(),
     loadLots(),
-    loadActiveReservation(),
+    loadActiveReservations(),
     loadHistory(),
     loadUserAnalytics()
   ])
@@ -332,9 +352,9 @@ const loadLots = async () => {
   lots.value = res.data.data || []
 }
 
-const loadActiveReservation = async () => {
+const loadActiveReservations = async () => {
   const res = await axios.get('http://localhost:5000/api/user/reservations/active', { headers: authHeader() })
-  activeReservation.value = res.data.reservation || null
+  activeReservations.value = res.data.reservations || []
 }
 
 const loadHistory = async () => {
@@ -363,7 +383,7 @@ const bookLot = async (lot) => {
     }, { headers: authHeader() })
     actionMessage.value = 'Reservation created successfully'
     actionType.value = 'success'
-    await Promise.all([loadActiveReservation(), loadLots(), loadHistory(), loadDashboardData()])
+    await Promise.all([loadActiveReservations(), loadLots(), loadHistory(), loadDashboardData()])
   } catch (e) {
     actionMessage.value = e?.response?.data?.message || 'Reservation failed'
     actionType.value = 'error'
@@ -373,21 +393,20 @@ const bookLot = async (lot) => {
   }
 }
 
-const releaseActive = async () => {
-  if (!activeReservation.value) return
-  releasing.value = true
+const releaseReservation = async (r) => {
+  releasingId.value = r.id
   actionMessage.value = ''
   actionType.value = 'success'
   try {
-    await axios.post(`http://localhost:5000/api/reservations/${activeReservation.value.id}/release`, {}, { headers: authHeader() })
-    actionMessage.value = 'Reservation released'
+    await axios.post(`http://localhost:5000/api/reservations/${r.id}/release`, {}, { headers: authHeader() })
+    actionMessage.value = `Reservation ${r.id} released`
     actionType.value = 'success'
-    await Promise.all([loadActiveReservation(), loadLots(), loadHistory(), loadDashboardData()])
+    await Promise.all([loadActiveReservations(), loadLots(), loadHistory(), loadDashboardData()])
   } catch (e) {
     actionMessage.value = e?.response?.data?.message || 'Release failed'
     actionType.value = 'error'
   } finally {
-    releasing.value = false
+    releasingId.value = null
   }
 }
 

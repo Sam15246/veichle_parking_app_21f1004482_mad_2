@@ -198,7 +198,10 @@
           <div class="table-responsive">
             <table class="table table-striped align-middle">
               <thead>
-                <tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Active Spot</th><th>Lot</th></tr>
+                <tr>
+                  <th>Username</th><th>Name</th><th>Email</th><th>Role</th>
+                  <th>Active Reservations</th><th>Active Spots</th><th>Lots</th>
+                </tr>
               </thead>
               <tbody>
                 <tr v-for="u in users" :key="u.id">
@@ -206,8 +209,22 @@
                   <td>{{ u.full_name }}</td>
                   <td>{{ u.email }}</td>
                   <td><span class="badge" :class="u.role==='admin'?'bg-danger':'bg-primary'">{{ u.role }}</span></td>
-                  <td>{{ u.active_spot_number || '-' }}</td>
-                  <td>{{ u.active_lot || '-' }}</td>
+                  <td>{{ u.active_reservations_count }}</td>
+                  <td>
+                    <span v-if="u.active_spots.length" class="text-nowrap">
+                      {{ u.active_spots.join(', ') }}
+                    </span>
+                    <span v-else class="text-muted">-</span>
+                  </td>
+                  <td>
+                    <span v-if="u.active_lots.length" class="text-nowrap">
+                      {{ u.active_lots.join(', ') }}
+                    </span>
+                    <span v-else class="text-muted">-</span>
+                  </td>
+                </tr>
+                <tr v-if="users.length===0">
+                  <td colspan="7" class="text-center text-muted">No users found</td>
                 </tr>
               </tbody>
             </table>
@@ -234,6 +251,7 @@
                   <th>Start</th>
                   <th>End</th>
                   <th>Duration (h)</th>
+                  <th>Billed (h)</th>
                   <th>Status</th>
                   <th>Price/hr</th>
                   <th>Final Cost</th>
@@ -249,6 +267,7 @@
                   <td>{{ formatDate(r.parking_timestamp) }}</td>
                   <td>{{ r.leaving_timestamp ? formatDate(r.leaving_timestamp) : '-' }}</td>
                   <td>{{ r.duration_hours }}</td>
+                  <td>{{ r.billed_hours }}</td>
                   <td>
                     <span class="badge"
                       :class="r.status==='COMPLETED' ? 'bg-success' : (r.status==='ACTIVE' ? 'bg-primary' : 'bg-secondary')">
