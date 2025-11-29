@@ -3,7 +3,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from datetime import datetime
-from celery import shared_task
+from celery_worker import celery
+from flask import current_app
 from flask import current_app
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -14,6 +15,12 @@ EXPORT_DIR = os.path.join(os.path.dirname(__file__), 'exports')
 REPORT_DIR = os.path.join(EXPORT_DIR, 'reports')
 os.makedirs(EXPORT_DIR, exist_ok=True)
 os.makedirs(REPORT_DIR, exist_ok=True)
+
+def redis_safe():
+    try:
+        return current_app.redis
+    except:
+        return None
 
 def _smtp_send(to_email, subject, html_body, attachments=None):
     host = os.getenv('SMTP_HOST')
@@ -50,11 +57,14 @@ def _write_job_status(job_id, status, extra=None):
     if extra:
         data.update(extra)
     try:
-        current_app.redis.setex(key, 3600, json.dumps(data))
+        r = redis_safe()
+        if r:
+            r.setex(key, 3600, json.dumps(data))
+        # current_app.redis.setex(key, 3600, json.dumps(data))
     except:
         pass
 
-@shared_task(name='tasks.send_daily_reminders')
+@celery.task(name='tasks.send_daily_reminders')
 def send_daily_reminders():
     users = User.query.filter_by(role='user').all()
     sent = 0
@@ -99,7 +109,7 @@ def _generate_pdf_report(user, rows, out_path):
     c.showPage()
     c.save()
 
-@shared_task(name='tasks.generate_monthly_reports')
+@celery.task(name='tasks.generate_monthly_reports')
 def generate_monthly_reports():
     users = User.query.filter_by(role='user').all()
     generated = 0
@@ -135,7 +145,7 @@ def generate_monthly_reports():
     db.session.commit()
     return {'users_processed': len(users), 'reports_sent': generated}
 
-@shared_task(name='tasks.export_user_history')
+@celery.task(name='tasks.export_user_history')
 def export_user_history(job_id):
     job = ExportJob.query.get(job_id)
     if not job:
@@ -169,7 +179,7 @@ def export_user_history(job_id):
         job.mark('FAILED'); db.session.commit()
         _write_job_status(job_id, 'FAILED', {'error': str(e)})
 
-@shared_task(name='tasks.export_admin_all')
+@celery.task(name='tasks.export_admin_all')
 def export_admin_all(job_id):
     job = ExportJob.query.get(job_id)
     if not job:
