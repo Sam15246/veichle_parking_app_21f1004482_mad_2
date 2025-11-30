@@ -17,6 +17,10 @@
         <button class="btn btn-outline-warning" @click="openProfileModal">
           <i class="bi bi-person-gear"></i> Update Profile
         </button>
+        <button class="btn btn-outline-success" @click="triggerUserExport" :disabled="exporting || polling">
+          <span v-if="exporting" class="spinner-border spinner-border-sm me-1"></span>
+          Export CSV
+        </button>
         <button @click="logout" class="btn btn-outline-primary">
           <i class="bi bi-box-arrow-right"></i> Logout
         </button>
@@ -211,6 +215,35 @@
         </div>
       </div>
 
+      <!-- Export Status Panel -->
+      <div class="card mb-4" v-if="exportJobId">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Export Job Status</h5>
+          <div>
+            <button v-if="polling" class="btn btn-sm btn-outline-danger me-2" @click="stopPolling">Stop Polling</button>
+            <button v-else class="btn btn-sm btn-outline-secondary" @click="pollStatus">Refresh</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <p class="mb-1"><strong>Job ID:</strong> {{ exportJobId }}</p>
+          <p class="mb-1"><strong>Status:</strong> 
+            <span :class="statusBadgeClass(exportStatus.status)">{{ exportStatus.status }}</span>
+          </p>
+          <div v-if="exportStatus.error" class="text-danger mb-2">
+            {{ exportStatus.error }}
+          </div>
+          <div v-if="exportDownloadUrl">
+            <a :href="exportDownloadUrl" class="btn btn-sm btn-success" download>
+              <i class="bi bi-download"></i> Download CSV
+            </a>
+          </div>
+          <div v-else-if="exportStatus.status==='COMPLETED'" class="text-warning">
+            Download link missing. Try Refresh.
+          </div>
+          <small class="text-muted">Status auto-refresh every 3s while polling.</small>
+        </div>
+      </div>
+
       <!-- User Analytics -->
       <div class="card mb-4" v-if="uAnalytics.lots.length">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -314,6 +347,14 @@ const profileForm = ref({ full_name: '', phone: '', address: '', pin_code: '' })
 const profileMessage = ref('')
 const profileMessageType = ref('success')
 const profileSaving = ref(false)
+
+// Export job state
+const exportJobId = ref(null)
+const exportStatus = ref({})
+const exportDownloadUrl = ref('')
+const exporting = ref(false)
+const polling = ref(false)
+let pollTimer = null
 
 // Helpers
 const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem('token')}` })
@@ -510,20 +551,53 @@ const logout = () => {
   localStorage.clear()
   router.push('/login')
 }
+
+// Export CSV
+const triggerUserExport = async () => {
+  exporting.value = true
+  exportStatus.value = {}
+  exportDownloadUrl.value = ''
+  try {
+    const res = await axios.post('http://localhost:5000/api/user/export-history', {}, { headers: authHeader() })
+    exportJobId.value = res.data.job_id
+    exporting.value = false
+    startPolling()
+  } catch (e) {
+    exporting.value = false
+    exportStatus.value = { status: 'ERROR', error: e?.response?.data?.message || 'Failed to start export' }
+  }
+}
+
+const pollStatus = async () => {
+  if (!exportJobId.value) return
+  try {
+    const res = await axios.get(`http://localhost:5000/api/user/export-history/${exportJobId.value}`, { headers: authHeader() })
+    exportStatus.value = res.data.job
+    if (res.data.job.download) {
+      exportDownloadUrl.value = `http://localhost:5000${res.data.job.download}`
+      stopPolling()
+    }
+  } catch (e) {
+    exportStatus.value = { status: 'ERROR', error: e?.response?.data?.message || 'Status fetch failed' }
+    stopPolling()
+  }
+}
+
+const startPolling = () => {
+  polling.value = true
+  pollStatus()
+  pollTimer = setInterval(pollStatus, 3000)
+}
+
+const stopPolling = () => {
+  polling.value = false
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
 </script>
 
 <style scoped>
-.card {
-  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-  border: 1px solid rgba(0, 0, 0, 0.125);
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-  transition: transform 0.2s ease-in-out;
-}
-
-.fs-1 {
-  font-size: 2rem !important;
-}
+/* ...existing code... */
 </style>

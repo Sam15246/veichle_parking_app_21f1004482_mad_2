@@ -9,7 +9,12 @@
         </h2>
         <p class="text-muted">Welcome back, {{ userFullName }}</p>
       </div>
-      <div class="col-auto">
+      <div class="col-auto d-flex gap-2">
+        <!-- New export button -->
+        <button class="btn btn-outline-success" @click="triggerAdminExport" :disabled="adminExporting || adminPolling">
+          <span v-if="adminExporting" class="spinner-border spinner-border-sm me-1"></span>
+          Export All CSV
+        </button>
         <button @click="logout" class="btn btn-outline-danger">
           <i class="bi bi-box-arrow-right"></i>
           Logout
@@ -286,6 +291,35 @@
         </div>
       </div>
 
+      <!-- Admin Export Status -->
+      <div class="card mb-4" v-if="adminExportJobId">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Admin Export Job Status</h5>
+          <div>
+            <button v-if="adminPolling" class="btn btn-sm btn-outline-danger me-2" @click="stopAdminPolling">Stop</button>
+            <button v-else class="btn btn-sm btn-outline-secondary" @click="pollAdminStatus">Refresh</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <p class="mb-1"><strong>Job ID:</strong> {{ adminExportJobId }}</p>
+          <p class="mb-1"><strong>Status:</strong>
+            <span :class="statusBadgeClass(adminExportStatus.status)">{{ adminExportStatus.status }}</span>
+          </p>
+          <div v-if="adminExportStatus.error" class="text-danger mb-2">
+            {{ adminExportStatus.error }}
+          </div>
+          <div v-if="adminExportDownloadUrl">
+            <a :href="adminExportDownloadUrl" class="btn btn-sm btn-success" download>
+              <i class="bi bi-download"></i> Download CSV
+            </a>
+          </div>
+          <div v-else-if="adminExportStatus.status==='COMPLETED'" class="text-warning">
+            Download link missing. Try Refresh.
+          </div>
+          <small class="text-muted">Auto-refresh every 3s while polling.</small>
+        </div>
+      </div>
+
       <!-- Analytics -->
       <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -348,6 +382,14 @@ const analytics = ref({
   revenue_by_lot: [],
   total_completed_revenue: 0
 })
+
+// Admin export state
+const adminExportJobId = ref(null)
+const adminExportStatus = ref({})
+const adminExportDownloadUrl = ref('')
+const adminExporting = ref(false)
+const adminPolling = ref(false)
+let adminPollTimer = null
 
 // Get user info from storage (per-tab)
 onMounted(async () => {
@@ -493,6 +535,58 @@ onMounted(async () => {
 
 const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem('token')}` })
 const formatDate = (iso) => iso ? new Date(iso).toLocaleString() : '-'
+
+const triggerAdminExport = async () => {
+  adminExporting.value = true
+  adminExportStatus.value = {}
+  adminExportDownloadUrl.value = ''
+  try {
+    const res = await axios.post('http://localhost:5000/api/admin/export-all', {}, { headers: authHeader() })
+    adminExportJobId.value = res.data.job_id
+    adminExporting.value = false
+    startAdminPolling()
+  } catch (e) {
+    adminExporting.value = false
+    adminExportStatus.value = { status: 'ERROR', error: e?.response?.data?.message || 'Failed to start export' }
+  }
+}
+
+const pollAdminStatus = async () => {
+  if (!adminExportJobId.value) return
+  try {
+    const res = await axios.get(`http://localhost:5000/api/admin/export-all/${adminExportJobId.value}`, { headers: authHeader() })
+    adminExportStatus.value = res.data.job
+    if (res.data.job.download) {
+      adminExportDownloadUrl.value = `http://localhost:5000${res.data.job.download}`
+      stopAdminPolling()
+    }
+  } catch (e) {
+    adminExportStatus.value = { status: 'ERROR', error: e?.response?.data?.message || 'Status fetch failed' }
+    stopAdminPolling()
+  }
+}
+
+const startAdminPolling = () => {
+  adminPolling.value = true
+  pollAdminStatus()
+  adminPollTimer = setInterval(pollAdminStatus, 3000)
+}
+
+const stopAdminPolling = () => {
+  adminPolling.value = false
+  if (adminPollTimer) {
+    clearInterval(adminPollTimer)
+    adminPollTimer = null
+  }
+}
+
+const statusBadgeClass = (s) => {
+  if (s === 'COMPLETED') return 'badge bg-success'
+  if (s === 'RUNNING') return 'badge bg-primary'
+  if (s === 'PENDING') return 'badge bg-secondary'
+  if (s === 'FAILED' || s === 'ERROR') return 'badge bg-danger'
+  return 'badge bg-light text-dark'
+}
 </script>
 
 <style scoped>

@@ -3,8 +3,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from datetime import datetime
-from celery_worker import celery
-from flask import current_app
+from celery import shared_task
 from flask import current_app
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -15,12 +14,6 @@ EXPORT_DIR = os.path.join(os.path.dirname(__file__), 'exports')
 REPORT_DIR = os.path.join(EXPORT_DIR, 'reports')
 os.makedirs(EXPORT_DIR, exist_ok=True)
 os.makedirs(REPORT_DIR, exist_ok=True)
-
-def redis_safe():
-    try:
-        return current_app.redis
-    except:
-        return None
 
 def _smtp_send(to_email, subject, html_body, attachments=None):
     host = os.getenv('SMTP_HOST')
@@ -52,19 +45,17 @@ def _smtp_send(to_email, subject, html_body, attachments=None):
         return False
 
 def _write_job_status(job_id, status, extra=None):
-    key = f"job:{job_id}"
     data = {'job_id': job_id, 'status': status}
     if extra:
         data.update(extra)
     try:
-        r = redis_safe()
+        r = getattr(current_app, 'redis', None)
         if r:
-            r.setex(key, 3600, json.dumps(data))
-        # current_app.redis.setex(key, 3600, json.dumps(data))
-    except:
+            r.setex(f"job:{job_id}", 3600, json.dumps(data))
+    except Exception:
         pass
 
-@celery.task(name='tasks.send_daily_reminders')
+@shared_task(name='tasks.send_daily_reminders')
 def send_daily_reminders():
     users = User.query.filter_by(role='user').all()
     sent = 0
@@ -109,7 +100,7 @@ def _generate_pdf_report(user, rows, out_path):
     c.showPage()
     c.save()
 
-@celery.task(name='tasks.generate_monthly_reports')
+@shared_task(name='tasks.generate_monthly_reports')
 def generate_monthly_reports():
     users = User.query.filter_by(role='user').all()
     generated = 0
@@ -122,8 +113,8 @@ def generate_monthly_reports():
                 'id': r.id,
                 'lot': lot.prime_location_name if lot else '',
                 'spot': r.parking_spot.spot_number if r.parking_spot else '',
-                'start': r.parking_timestamp.strftime('%Y-%m-%d %H:%M'),
-                'end': r.leaving_timestamp.strftime('%Y-%m-%d %H:%M') if r.leaving_timestamp else '',
+                'start': r.parking_timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                'end': r.leaving_timestamp.strftime('%Y-%m-%d %H:%M:%S') if r.leaving_timestamp else '',
                 'hours': r.duration_hours,
                 'cost': r.final_cost
             })
@@ -145,7 +136,7 @@ def generate_monthly_reports():
     db.session.commit()
     return {'users_processed': len(users), 'reports_sent': generated}
 
-@celery.task(name='tasks.export_user_history')
+@shared_task(name='tasks.export_user_history')
 def export_user_history(job_id):
     job = ExportJob.query.get(job_id)
     if not job:
@@ -168,8 +159,8 @@ def export_user_history(job_id):
                     lot.prime_location_name if lot else '',
                     spot.spot_number if spot else '',
                     r.vehicle_number,
-                    r.parking_timestamp,
-                    r.leaving_timestamp,
+                    r.parking_timestamp.strftime('%Y-%m-%d %H:%M:%S') if r.parking_timestamp else '',
+                    r.leaving_timestamp.strftime('%Y-%m-%d %H:%M:%S') if r.leaving_timestamp else '',
                     r.status,
                     r.final_cost
                 ])
@@ -179,7 +170,7 @@ def export_user_history(job_id):
         job.mark('FAILED'); db.session.commit()
         _write_job_status(job_id, 'FAILED', {'error': str(e)})
 
-@celery.task(name='tasks.export_admin_all')
+@shared_task(name='tasks.export_admin_all')
 def export_admin_all(job_id):
     job = ExportJob.query.get(job_id)
     if not job:
@@ -202,8 +193,8 @@ def export_admin_all(job_id):
                     lot.prime_location_name if lot else '',
                     spot.spot_number if spot else '',
                     r.vehicle_number,
-                    r.parking_timestamp,
-                    r.leaving_timestamp,
+                    r.parking_timestamp.strftime('%Y-%m-%d %H:%M:%S') if r.parking_timestamp else '',
+                    r.leaving_timestamp.strftime('%Y-%m-%d %H:%M:%S') if r.leaving_timestamp else '',
                     r.status,
                     r.final_cost
                 ])
