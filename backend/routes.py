@@ -1,5 +1,5 @@
 from flask_restful import Api, Resource
-from flask import request, jsonify, current_app, send_file
+from flask import request, current_app, send_file, g
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from models import db, User, ParkingLot, ParkingSpot, Reservation, SpotStatus, ReservationStatus, ExportJob
 from models import create_parking_spots_for_lot  # helper for initial spot generation
@@ -17,7 +17,11 @@ def cache_get(key):
         return None
     try:
         val = r.get(key)
-        return json.loads(val) if val else None
+        data = json.loads(val) if val else None
+        # mark cache context for header injection
+        g.cache_key = key
+        g.cache_hit = data is not None
+        return data
     except Exception:
         return None
 
@@ -27,6 +31,11 @@ def cache_set(key, data, ttl):
         return
     try:
         r.setex(key, ttl, json.dumps(data))
+        # mark cache context (MISS -> now cached)
+        g.cache_key = key
+        g.cache_ttl = ttl
+        if getattr(g, 'cache_hit', None) is None:
+            g.cache_hit = False
     except Exception:
         pass
 
@@ -491,15 +500,16 @@ class AdminLotSpotsAPI(Resource):
         lot = ParkingLot.query.get(lot_id)
         if not lot:
             return {'message': 'Lot not found'}, 404
-
+        cache_key = f'admin_lot_spots:{lot_id}'
+        cached = cache_get(cache_key)
+        if cached:
+            return cached, 200
         spots = ParkingSpot.query.filter_by(lot_id=lot_id).order_by(ParkingSpot.spot_number.asc()).all()
-        data = [{
-            'id': s.id,
-            'spot_number': s.spot_number,
-            'status': s.status
-        } for s in spots]
-
-        return {
+        data = [
+            {'id': s.id, 'spot_number': s.spot_number, 'status': s.status}
+            for s in spots
+        ]
+        response = {
             'message': 'Spots fetched',
             'lot': {
                 'id': lot.id,
@@ -509,7 +519,9 @@ class AdminLotSpotsAPI(Resource):
                 'maximum_spots': lot.maximum_spots
             },
             'data': data
-        }, 200
+        }
+        cache_set(cache_key, response, current_app.config['LOTS_CACHE_TTL'])
+        return response, 200
 
 api.add_resource(AdminLotSpotsAPI, '/api/admin/lots/<int:lot_id>/spots')
 
@@ -587,7 +599,10 @@ class CreateReservation(Resource):
             )
             db.session.add(res); db.session.commit()
             cache_delete('parking_lots_public', 'admin_lots_list', 'admin_analytics_overview',
-                         f'user_analytics_overview:{current_user.username}')
+                         f'user_analytics_overview:{current_user.username}',
+                         f'user_active_reservations:{current_user.username}',
+                         f'user_reservations:{current_user.username}',
+                         'admin_reservations:all:all:all')
             return {
                 'message': 'Reservation created',
                 'reservation': {
@@ -629,7 +644,10 @@ class ReleaseReservation(Resource):
             res.complete_reservation()
             db.session.commit()
             cache_delete('parking_lots_public', 'admin_lots_list', 'admin_analytics_overview',
-                         f'user_analytics_overview:{res.user.username}')
+                         f'user_analytics_overview:{res.user.username}',
+                         f'user_active_reservations:{res.user.username}',
+                         f'user_reservations:{res.user.username}',
+                         'admin_reservations:all:all:all')
             return {
                 'message': 'Reservation released',
                 'reservation': {
@@ -653,6 +671,10 @@ class ActiveReservations(Resource):
         current_user = User.query.filter_by(username=get_jwt_identity()).first()
         if not current_user:
             return {'message': 'User not found'}, 404
+        cache_key = f'user_active_reservations:{current_user.username}'
+        cached = cache_get(cache_key)
+        if cached:
+            return cached, 200
         active_list = Reservation.query.filter_by(
             user_id=current_user.id,
             status=ReservationStatus.ACTIVE.value
@@ -673,10 +695,12 @@ class ActiveReservations(Resource):
                 'lot': {'id': lot.id, 'name': lot.prime_location_name, 'price_per_hour': lot.price_per_hour}
             }
 
-        return {
+        response = {
             'message': 'Active reservations fetched',
             'reservations': [serialize(r) for r in active_list]
-        }, 200
+        }
+        cache_set(cache_key, response, current_app.config['ANALYTICS_CACHE_TTL'])
+        return response, 200
 
 # Update resource registration (same endpoint path)
 api.add_resource(ActiveReservations, '/api/user/reservations/active')
@@ -687,7 +711,10 @@ class UserReservations(Resource):
         current_user = User.query.filter_by(username=get_jwt_identity()).first()
         if not current_user:
             return {'message': 'User not found'}, 404
-
+        cache_key = f'user_reservations:{current_user.username}'
+        cached = cache_get(cache_key)
+        if cached:
+            return cached, 200
         res_list = Reservation.query.filter_by(user_id=current_user.id).order_by(Reservation.created_at.desc()).all()
 
         def serialize(r: Reservation):
@@ -707,7 +734,9 @@ class UserReservations(Resource):
                 'lot': {'id': lot.id, 'name': lot.prime_location_name, 'price_per_hour': lot.price_per_hour} if lot else None
             }
 
-        return {'message': 'Reservations fetched', 'data': [serialize(r) for r in res_list]}, 200
+        response = {'message': 'Reservations fetched', 'data': [serialize(r) for r in res_list]}
+        cache_set(cache_key, response, current_app.config['ANALYTICS_CACHE_TTL'])
+        return response, 200
 
 api.add_resource(UserReservations, '/api/user/reservations')
 
@@ -724,6 +753,15 @@ class AdminReservationsAPI(Resource):
         user_id = request.args.get('user_id', type=int)
         lot_id = request.args.get('lot_id', type=int)
 
+        # Build a cache key incorporating filters (small cardinality expected)
+        base_key = 'admin_reservations'
+        status = request.args.get('status')
+        user_id = request.args.get('user_id', type=int)
+        lot_id = request.args.get('lot_id', type=int)
+        cache_key = f"{base_key}:{status or 'all'}:{user_id or 'all'}:{lot_id or 'all'}"
+        cached = cache_get(cache_key)
+        if cached:
+            return cached, 200
         q = Reservation.query
         if status:
             q = q.filter(Reservation.status == status)
@@ -756,7 +794,9 @@ class AdminReservationsAPI(Resource):
                 'final_cost': r.final_cost,
             }
 
-        return {'message': 'Reservations fetched', 'data': [serialize(r) for r in reservations]}, 200
+        response = {'message': 'Reservations fetched', 'data': [serialize(r) for r in reservations]}
+        cache_set(cache_key, response, current_app.config['ANALYTICS_CACHE_TTL'])
+        return response, 200
 
 api.add_resource(AdminReservationsAPI, '/api/admin/reservations')
 

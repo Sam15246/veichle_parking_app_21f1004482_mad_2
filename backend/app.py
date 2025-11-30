@@ -1,22 +1,28 @@
-from flask import Flask, jsonify, request
+from flask import Flask
+from dotenv import load_dotenv
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 import os
 import redis
 from celery_app import make_celery
-from models import db, init_sample_data, Admin
-from routes import api
-from celery.schedules import crontab  # added
+from models import db, init_sample_data
+from celery.schedules import crontab
+from flask import g
+from datetime import timedelta
 def create_app():
     app = Flask(__name__)
     CORS(app)
+    # Load environment variables from .env for SMTP and other configs
+    try:
+        load_dotenv()
+    except Exception:
+        pass
 
-    # -------------------------------
-    # 1. Core config
-    # -------------------------------
-    app.config['SECRET_KEY'] = 'your-secret-key-here'
-    app.config['JWT_SECRET_KEY'] = 'jwt-secret-string'
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False
+    # Core config (use environment with safe defaults for dev)
+    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'dev-jwt-secret')
+    jwt_hours = int(os.getenv('JWT_EXPIRES_HOURS', '24'))
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=jwt_hours)
 
     basedir = os.path.abspath(os.path.dirname(__file__))
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "parking_system.db")}'
@@ -41,20 +47,21 @@ def create_app():
         app.config['CELERY_BROKER_URL'] = f"redis://127.0.0.1:6379/1"
         app.config['CELERY_RESULT_BACKEND'] = f"redis://127.0.0.1:6379/2"
 
+    # Celery beat schedule
     app.config['CELERY_BEAT_SCHEDULE'] = {
         'daily-reminders': {
             'task': 'tasks.send_daily_reminders',
-            'schedule': crontab(hour=18, minute=0),
+            'schedule': crontab(minute=0, hour=9),
         },
         'monthly-reports': {
             'task': 'tasks.generate_monthly_reports',
-            'schedule': crontab(day_of_month='1', hour=8, minute=0),
+            'schedule': crontab(minute=15, hour=9, day_of_month='1'),
         }
     }
 
     # Cache TTLs (in seconds)
-    app.config['LOTS_CACHE_TTL'] = 300  # 5 minutes
-    app.config['ANALYTICS_CACHE_TTL'] = 900  # 15 minutes
+    app.config['LOTS_CACHE_TTL'] = 30  # 30 seconds
+    app.config['ANALYTICS_CACHE_TTL'] = 60  # 60 seconds
     app.config['MAX_ACTIVE_RESERVATIONS_PER_USER'] = 5 # New config
 
     # -------------------------------
@@ -73,9 +80,7 @@ def create_app():
     }
     app.celery = make_celery(app, celery_config)
 
-    # ----------------------------------------
-    # 6. NOW import routes (safe)
-    # ----------------------------------------
+    # Import routes after app and celery initialization
     from routes import api
     api.init_app(app)
 
@@ -115,7 +120,7 @@ def home():
 def health_check():
     return {'status': 'healthy', 'database': 'connected'}
 
-# New ops endpoint to verify Redis & Celery config quickly
+# Ops endpoint to verify Redis & Celery config
 @app.route('/ops/status')
 def ops_status():
     redis_ok = False
@@ -137,6 +142,24 @@ def ops_status():
             'beat_schedule': True
         }
     }, 200
+
+# Inject cache headers for visibility on cached endpoints
+@app.after_request
+def add_cache_headers(response):
+    try:
+        cache_hit = getattr(g, 'cache_hit', None)
+        cache_key = getattr(g, 'cache_key', None)
+        ttl = getattr(g, 'cache_ttl', None)
+        if cache_hit is not None:
+            response.headers['X-Cache'] = 'HIT' if cache_hit else 'MISS'
+        if cache_key:
+            response.headers['X-Cache-Key'] = cache_key
+        if ttl is not None:
+            response.headers['X-Cache-TTL'] = str(ttl)
+    except Exception:
+        # Do not break response flow if header injection fails
+        pass
+    return response
 
 if __name__ == '__main__':
     with app.app_context():
