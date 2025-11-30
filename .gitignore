@@ -169,6 +169,15 @@ build/Release
 
 # Dependency directories
 jspm_packages/
+# Frontend dependency/build artifacts
+/frontend/node_modules/
+/frontend/dist/
+/frontend/dist-ssr/
+/frontend/coverage/
+/frontend/.eslintcache
+/frontend/*.log
+/frontend/cypress/videos/
+/frontend/cypress/screenshots/
 
 # TypeScript cache
 *.tsbuildinfo
