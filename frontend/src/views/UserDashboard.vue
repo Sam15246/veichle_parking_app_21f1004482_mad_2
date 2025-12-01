@@ -17,10 +17,16 @@
         <button class="btn btn-outline-warning" @click="openProfileModal">
           <i class="bi bi-person-gear"></i> Update Profile
         </button>
-        <button class="btn btn-outline-success" @click="triggerUserExport" :disabled="exporting || polling">
-          <span v-if="exporting" class="spinner-border spinner-border-sm me-1"></span>
-          Export CSV
-        </button>
+        <div class="d-flex align-items-center">
+          <button
+            class="btn btn-outline-success"
+            @click="triggerUserExport"
+            :disabled="userExporting || userPolling"
+          >
+            <span v-if="userExporting" class="spinner-border spinner-border-sm me-1"></span>
+            Export CSV
+          </button>
+        </div>
         <button @click="logout" class="btn btn-outline-primary">
           <i class="bi bi-box-arrow-right"></i> Logout
         </button>
@@ -98,7 +104,15 @@
             <table class="table table-sm table-striped align-middle">
               <thead>
                 <tr>
-                  <th>#</th><th>Lot</th><th>Spot</th><th>Vehicle</th><th>Since</th><th>Duration (h)</th><th>Billed (h)</th><th>Est. Cost</th><th>Action</th>
+                  <th>#</th>
+                  <th>Lot</th>
+                  <th>Spot</th>
+                  <th>Vehicle</th>
+                  <th>Since</th>
+                  <th>Duration (h)</th>
+                  <th>Billed (h)</th>
+                  <th>Est. Cost</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,15 +126,20 @@
                   <td>{{ r.billed_hours }}</td>
                   <td>₹ {{ r.calculated_cost }}</td>
                   <td>
-                    <button class="btn btn-sm btn-outline-danger"
-                            :disabled="releasingId===r.id"
-                            @click="releaseReservation(r)">
-                      <span v-if="releasingId===r.id" class="spinner-border spinner-border-sm me-1"></span>
+                    <button
+                      class="btn btn-sm btn-outline-danger"
+                      :disabled="releasingId === r.id"
+                      @click="releaseReservation(r)"
+                    >
+                      <span
+                        v-if="releasingId === r.id"
+                        class="spinner-border spinner-border-sm me-1"
+                      ></span>
                       Release
                     </button>
                   </td>
                 </tr>
-                <tr v-if="activeReservations.length===0">
+                <tr v-if="activeReservations.length === 0">
                   <td colspan="9" class="text-center text-muted">No active reservations</td>
                 </tr>
               </tbody>
@@ -140,7 +159,11 @@
             <table class="table table-striped align-middle">
               <thead>
                 <tr>
-                  <th>Lot</th><th>Pin</th><th>Price/hr</th><th>Available</th><th>Action</th>
+                  <th>Lot</th>
+                  <th>Pin</th>
+                  <th>Price/hr</th>
+                  <th>Available</th>
+                  <th>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -149,26 +172,37 @@
                   <td>{{ lot.pin_code }}</td>
                   <td>₹ {{ lot.price_per_hour }}</td>
                   <td>
-                    <span class="badge" :class="lot.available_spots>0?'bg-success':'bg-secondary'">
+                    <span
+                      class="badge"
+                      :class="lot.available_spots > 0 ? 'bg-success' : 'bg-secondary'"
+                    >
                       {{ lot.available_spots }}
                     </span>
                   </td>
                   <td>
-                    <button class="btn btn-sm btn-primary"
-                            :disabled="bookingLotId===lot.id || lot.available_spots===0"
-                            @click="bookLot(lot)">
-                      <span v-if="bookingLotId===lot.id" class="spinner-border spinner-border-sm me-1"></span>
+                    <button
+                      class="btn btn-sm btn-primary"
+                      :disabled="bookingLotId === lot.id || lot.available_spots === 0"
+                      @click="bookLot(lot)"
+                    >
+                      <span
+                        v-if="bookingLotId === lot.id"
+                        class="spinner-border spinner-border-sm me-1"
+                      ></span>
                       Book
                     </button>
                   </td>
                 </tr>
-                <tr v-if="lots.length===0">
+                <tr v-if="lots.length === 0">
                   <td colspan="5" class="text-center text-muted">No lots found</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div v-if="actionMessage" :class="['mt-2', actionType==='error'?'text-danger':'text-success']">
+          <div
+            v-if="actionMessage"
+            :class="['mt-2', actionType === 'error' ? 'text-danger' : 'text-success']"
+          >
             {{ actionMessage }}
           </div>
         </div>
@@ -184,8 +218,16 @@
             <table class="table table-sm table-bordered">
               <thead>
                 <tr>
-                  <th>#</th><th>Lot</th><th>Spot</th><th>Vehicle</th>
-                  <th>Start</th><th>End</th><th>Duration (h)</th><th>Billed (h)</th><th>Status</th><th>Cost</th>
+                  <th>#</th>
+                  <th>Lot</th>
+                  <th>Spot</th>
+                  <th>Vehicle</th>
+                  <th>Start</th>
+                  <th>End</th>
+                  <th>Duration (h)</th>
+                  <th>Billed (h)</th>
+                  <th>Status</th>
+                  <th>Cost</th>
                 </tr>
               </thead>
               <tbody>
@@ -199,14 +241,22 @@
                   <td>{{ r.duration_hours }}</td>
                   <td>{{ r.billed_hours }}</td>
                   <td>
-                    <span class="badge"
-                          :class="r.status==='COMPLETED'?'bg-success':(r.status==='ACTIVE'?'bg-primary':'bg-secondary')">
+                    <span
+                      class="badge"
+                      :class="
+                        r.status === 'COMPLETED'
+                          ? 'bg-success'
+                          : r.status === 'ACTIVE'
+                            ? 'bg-primary'
+                            : 'bg-secondary'
+                      "
+                    >
                       {{ r.status }}
                     </span>
                   </td>
                   <td>₹ {{ r.final_cost ?? r.calculated_cost }}</td>
                 </tr>
-                <tr v-if="history.length===0">
+                <tr v-if="history.length === 0">
                   <td colspan="10" class="text-center text-muted">No reservations yet</td>
                 </tr>
               </tbody>
@@ -220,13 +270,22 @@
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Export Job Status</h5>
           <div>
-            <button v-if="polling" class="btn btn-sm btn-outline-danger me-2" @click="stopPolling">Stop Polling</button>
-            <button v-else class="btn btn-sm btn-outline-secondary" @click="pollStatus">Refresh</button>
+            <button
+              v-if="userPolling"
+              class="btn btn-sm btn-outline-danger me-2"
+              @click="stopUserPolling"
+            >
+              Stop
+            </button>
+            <button v-else class="btn btn-sm btn-outline-secondary" @click="pollUserStatus">
+              Refresh
+            </button>
           </div>
         </div>
         <div class="card-body">
           <p class="mb-1"><strong>Job ID:</strong> {{ exportJobId }}</p>
-          <p class="mb-1"><strong>Status:</strong> 
+          <p class="mb-1">
+            <strong>Status:</strong>
             <span :class="statusBadgeClass(exportStatus.status)">{{ exportStatus.status }}</span>
           </p>
           <div v-if="exportStatus.error" class="text-danger mb-2">
@@ -237,10 +296,10 @@
               <i class="bi bi-download"></i> Download CSV
             </a>
           </div>
-          <div v-else-if="exportStatus.status==='COMPLETED'" class="text-warning">
+          <div v-else-if="exportStatus.status === 'COMPLETED'" class="text-warning">
             Download link missing. Try Refresh.
           </div>
-          <small class="text-muted">Status auto-refresh every 3s while polling.</small>
+          <small class="text-muted">Auto-refresh every 3s while polling.</small>
         </div>
       </div>
 
@@ -277,7 +336,10 @@
               <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-              <div v-if="profileMessage" :class="['mb-2', profileMessageType==='error'?'text-danger':'text-success']">
+              <div
+                v-if="profileMessage"
+                :class="['mb-2', profileMessageType === 'error' ? 'text-danger' : 'text-success']"
+              >
                 {{ profileMessage }}
               </div>
               <form @submit.prevent="saveProfile">
@@ -298,7 +360,9 @@
                   <input class="form-control" v-model="profileForm.pin_code" />
                 </div>
                 <div class="d-flex justify-content-end gap-2">
-                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    Cancel
+                  </button>
                   <button type="submit" class="btn btn-primary" :disabled="profileSaving">
                     <span v-if="profileSaving" class="spinner-border spinner-border-sm me-1"></span>
                     Save
@@ -309,7 +373,6 @@
           </div>
         </div>
       </div>
-
     </div>
   </div>
 </template>
@@ -321,12 +384,11 @@ import axios from 'axios'
 
 const router = useRouter()
 
-// Reactive data
+// State
 const loading = ref(true)
 const userFullName = ref('')
 const userStats = ref({ total_reservations: 0, active_reservations: 0, available_lots: 0 })
 
-// New state
 const lots = ref([])
 const activeReservations = ref([])
 const history = ref([])
@@ -341,7 +403,7 @@ const uAnalytics = ref({
   hours_per_lot: [],
   cost_per_lot: [],
   total_spent: 0,
-  total_hours: 0
+  total_hours: 0,
 })
 const profileForm = ref({ full_name: '', phone: '', address: '', pin_code: '' })
 const profileMessage = ref('')
@@ -352,13 +414,31 @@ const profileSaving = ref(false)
 const exportJobId = ref(null)
 const exportStatus = ref({})
 const exportDownloadUrl = ref('')
-const exporting = ref(false)
-const polling = ref(false)
-let pollTimer = null
+const userExporting = ref(false)
+const userPolling = ref(false)
+let userPollTimer = null
+let userPollStopTimeout = null
 
 // Helpers
 const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem('token')}` })
-const formatDate = (iso) => iso ? new Date(iso).toLocaleString() : '-'
+const formatDate = (iso) => (iso ? new Date(iso).toLocaleString() : '-')
+// Export status badge class
+const statusBadgeClass = (status) => {
+  const base = 'badge '
+  switch (status) {
+    case 'COMPLETED':
+      return base + 'bg-success'
+    case 'RUNNING':
+      return base + 'bg-primary'
+    case 'PENDING':
+      return base + 'bg-warning text-dark'
+    case 'FAILED':
+    case 'ERROR':
+      return base + 'bg-danger'
+    default:
+      return base + 'bg-secondary'
+  }
+}
 
 // Mounted
 onMounted(async () => {
@@ -375,16 +455,16 @@ onMounted(async () => {
     loadActiveReservations(),
     loadHistory(),
     loadUserAnalytics(),
-    loadProfile()
+    loadProfile(),
   ])
 })
 
-// Existing stats
+// Stats
 const loadDashboardData = async () => {
   try {
     const token = sessionStorage.getItem('token')
     const response = await axios.get('http://localhost:5000/api/user/dashboard', {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     })
     userStats.value = response.data.user_data
   } catch (error) {
@@ -394,24 +474,30 @@ const loadDashboardData = async () => {
   }
 }
 
-// New loads
+// Loads
 const loadLots = async () => {
   const res = await axios.get('http://localhost:5000/api/parking-lots')
   lots.value = res.data.data || []
 }
 
 const loadActiveReservations = async () => {
-  const res = await axios.get('http://localhost:5000/api/user/reservations/active', { headers: authHeader() })
+  const res = await axios.get('http://localhost:5000/api/user/reservations/active', {
+    headers: authHeader(),
+  })
   activeReservations.value = res.data.reservations || []
 }
 
 const loadHistory = async () => {
-  const res = await axios.get('http://localhost:5000/api/user/reservations', { headers: authHeader() })
+  const res = await axios.get('http://localhost:5000/api/user/reservations', {
+    headers: authHeader(),
+  })
   history.value = res.data.data || []
 }
 
 const loadUserAnalytics = async () => {
-  const res = await axios.get('http://localhost:5000/api/user/analytics/overview', { headers: authHeader() })
+  const res = await axios.get('http://localhost:5000/api/user/analytics/overview', {
+    headers: authHeader(),
+  })
   uAnalytics.value = res.data.data
   renderUserCharts()
 }
@@ -424,9 +510,9 @@ const loadProfile = async () => {
       full_name: u.full_name || '',
       phone: u.phone || '',
       address: u.address || '',
-      pin_code: u.pin_code || ''
+      pin_code: u.pin_code || '',
     }
-  } catch (e) {
+  } catch (err) {
     // ignore
   }
 }
@@ -435,15 +521,21 @@ const loadProfile = async () => {
 const bookLot = async (lot) => {
   actionMessage.value = ''
   actionType.value = 'success'
-  const vehicle_number = window.prompt(`Enter vehicle number to book at ${lot.prime_location_name}:`)
+  const vehicle_number = window.prompt(
+    `Enter vehicle number to book at ${lot.prime_location_name}:`,
+  )
   if (!vehicle_number) return
   booking.value = true
   bookingLotId.value = lot.id
   try {
-    await axios.post('http://localhost:5000/api/reservations', {
-      lot_id: lot.id,
-      vehicle_number
-    }, { headers: authHeader() })
+    await axios.post(
+      'http://localhost:5000/api/reservations',
+      {
+        lot_id: lot.id,
+        vehicle_number,
+      },
+      { headers: authHeader() },
+    )
     actionMessage.value = 'Reservation created successfully'
     actionType.value = 'success'
     await Promise.all([loadActiveReservations(), loadLots(), loadHistory(), loadDashboardData()])
@@ -461,7 +553,11 @@ const releaseReservation = async (r) => {
   actionMessage.value = ''
   actionType.value = 'success'
   try {
-    await axios.post(`http://localhost:5000/api/reservations/${r.id}/release`, {}, { headers: authHeader() })
+    await axios.post(
+      `http://localhost:5000/api/reservations/${r.id}/release`,
+      {},
+      { headers: authHeader() },
+    )
     actionMessage.value = `Reservation ${r.id} released`
     actionType.value = 'success'
     await Promise.all([loadActiveReservations(), loadLots(), loadHistory(), loadDashboardData()])
@@ -484,13 +580,15 @@ const renderUserCharts = async () => {
       type: 'bar',
       data: {
         labels: uAnalytics.value.lots,
-        datasets: [{
-          label: 'Reservations',
+        datasets: [
+          {
+            label: 'Reservations',
             data: uAnalytics.value.reservations_per_lot,
-            backgroundColor: '#0d6efd'
-        }]
+            backgroundColor: '#0d6efd',
+          },
+        ],
       },
-      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      options: { responsive: true, scales: { y: { beginAtZero: true } } },
     })
   }
 
@@ -499,18 +597,20 @@ const renderUserCharts = async () => {
       type: 'bar',
       data: {
         labels: uAnalytics.value.lots,
-        datasets: [{
-          label: 'Cost (₹)',
-          data: uAnalytics.value.cost_per_lot,
-          backgroundColor: '#dc3545'
-        }]
+        datasets: [
+          {
+            label: 'Cost (₹)',
+            data: uAnalytics.value.cost_per_lot,
+            backgroundColor: '#dc3545',
+          },
+        ],
       },
-      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      options: { responsive: true, scales: { y: { beginAtZero: true } } },
     })
   }
 }
 
-// Open modal using Bootstrap
+// Open profile modal
 const openProfileModal = () => {
   profileMessage.value = ''
   profileMessageType.value = 'success'
@@ -526,7 +626,9 @@ const saveProfile = async () => {
   profileMessage.value = ''
   profileMessageType.value = 'success'
   try {
-    await axios.put('http://localhost:5000/api/profile', profileForm.value, { headers: authHeader() })
+    await axios.put('http://localhost:5000/api/profile', profileForm.value, {
+      headers: authHeader(),
+    })
     profileMessage.value = 'Profile updated'
     profileMessageType.value = 'success'
     sessionStorage.setItem('userFullName', profileForm.value.full_name)
@@ -552,48 +654,106 @@ const logout = () => {
   router.push('/login')
 }
 
-// Export CSV
 const triggerUserExport = async () => {
-  exporting.value = true
+  if (userExporting.value || userPolling.value) return
+  userExporting.value = true
   exportStatus.value = {}
   exportDownloadUrl.value = ''
+
   try {
-    const res = await axios.post('http://localhost:5000/api/user/export-history', {}, { headers: authHeader() })
+    const res = await axios.post(
+      'http://localhost:5000/api/user/export-history',
+      {},
+      { headers: authHeader() },
+    )
     exportJobId.value = res.data.job_id
-    exporting.value = false
-    startPolling()
-  } catch (e) {
-    exporting.value = false
-    exportStatus.value = { status: 'ERROR', error: e?.response?.data?.message || 'Failed to start export' }
+
+    startUserPolling()
+  } catch (err) {
+    exportStatus.value = {
+      status: 'ERROR',
+      error: err?.response?.data?.message || 'Failed to start export',
+    }
   }
+  setTimeout(() => {
+    userExporting.value = false
+  }, 800)
 }
 
-const pollStatus = async () => {
+const pollUserStatus = async () => {
   if (!exportJobId.value) return
   try {
-    const res = await axios.get(`http://localhost:5000/api/user/export-history/${exportJobId.value}`, { headers: authHeader() })
+    const res = await axios.get(
+      `http://localhost:5000/api/user/export-history/${exportJobId.value}`,
+      { headers: authHeader() },
+    )
     exportStatus.value = res.data.job
     if (res.data.job.download) {
       exportDownloadUrl.value = `http://localhost:5000${res.data.job.download}`
-      stopPolling()
+      await autoDownload(exportDownloadUrl.value)
+      stopUserPolling()
+      return
     }
-  } catch (e) {
-    exportStatus.value = { status: 'ERROR', error: e?.response?.data?.message || 'Status fetch failed' }
-    stopPolling()
+  } catch (err) {
+    exportStatus.value = {
+      status: 'ERROR',
+      error: err?.response?.data?.message || 'Status fetch failed',
+    }
+    stopUserPolling()
   }
 }
 
-const startPolling = () => {
-  polling.value = true
-  pollStatus()
-  pollTimer = setInterval(pollStatus, 3000)
+const startUserPolling = () => {
+  if (userPollTimer) {
+    clearInterval(userPollTimer)
+    userPollTimer = null
+  }
+  if (userPollStopTimeout) {
+    clearTimeout(userPollStopTimeout)
+    userPollStopTimeout = null
+  }
+  userPolling.value = true
+  // start timestamp not used by current flow; keep simple
+  pollUserStatus()
+  userPollTimer = setInterval(pollUserStatus, 3000)
 }
 
-const stopPolling = () => {
-  polling.value = false
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
+const stopUserPolling = () => {
+  userPolling.value = false
+  if (userPollTimer) {
+    clearInterval(userPollTimer)
+    userPollTimer = null
+  }
+  if (userPollStopTimeout) {
+    clearTimeout(userPollStopTimeout)
+    userPollStopTimeout = null
+  }
+  if (!exportDownloadUrl.value) {
+    exportJobId.value = null
+    exportStatus.value = {}
+  }
+}
+
+// Perform an authenticated download and trigger browser save prompt
+const autoDownload = async (url) => {
+  try {
+    const res = await axios.get(url, { headers: authHeader(), responseType: 'blob' })
+    const blob = new Blob([res.data])
+    const dlUrl = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    // Try to get filename from header, else fallback
+    const cd = res.headers['content-disposition'] || ''
+    const match = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/)
+    const filename = decodeURIComponent(match?.[1] || match?.[2] || 'user_history.csv')
+    a.href = dlUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(dlUrl)
+  } catch (err) {
+    // If auto-download fails, leave the link visible for manual click
+    console.error('Auto-download failed:', err)
   }
 }
 </script>

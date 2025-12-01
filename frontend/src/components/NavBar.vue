@@ -31,8 +31,10 @@
               <i class="bi bi-person-circle me-1"></i>{{ username }}
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
-              <li v-if="userRole==='admin'">
-                <router-link class="dropdown-item" to="/admin/dashboard">Admin Dashboard</router-link>
+              <li v-if="userRole === 'admin'">
+                <router-link class="dropdown-item" to="/admin/dashboard"
+                  >Admin Dashboard</router-link
+                >
               </li>
               <li v-else>
                 <router-link class="dropdown-item" to="/user/dashboard">User Dashboard</router-link>
@@ -57,14 +59,15 @@ const userRole = ref('')
 const username = ref('')
 
 const init = () => {
-  const token = localStorage.getItem('token')
-  userRole.value = localStorage.getItem('userRole') || ''
-  username.value = localStorage.getItem('username') || ''
+  const token = sessionStorage.getItem('token') || localStorage.getItem('token')
+  userRole.value = sessionStorage.getItem('userRole') || localStorage.getItem('userRole') || ''
+  username.value = sessionStorage.getItem('username') || localStorage.getItem('username') || ''
   isLoggedIn.value = !!token
 }
 onMounted(init)
 
 const logout = () => {
+  sessionStorage.clear()
   localStorage.clear()
   init()
   router.push('/login')

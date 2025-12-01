@@ -10,10 +10,24 @@
             <!-- Login Type Selector -->
             <div class="mb-3">
               <div class="btn-group w-100" role="group">
-                <input type="radio" class="btn-check" id="userLogin" v-model="loginType" value="user" autocomplete="off">
+                <input
+                  type="radio"
+                  class="btn-check"
+                  id="userLogin"
+                  v-model="loginType"
+                  value="user"
+                  autocomplete="off"
+                />
                 <label class="btn btn-outline-primary" for="userLogin">User Login</label>
-                
-                <input type="radio" class="btn-check" id="adminLogin" v-model="loginType" value="admin" autocomplete="off">
+
+                <input
+                  type="radio"
+                  class="btn-check"
+                  id="adminLogin"
+                  v-model="loginType"
+                  value="admin"
+                  autocomplete="off"
+                />
                 <label class="btn btn-outline-danger" for="adminLogin">Admin Login</label>
               </div>
             </div>
@@ -30,30 +44,30 @@
             <form @submit.prevent="handleLogin">
               <div class="mb-3">
                 <label for="username" class="form-label">Username</label>
-                <input 
-                  type="text" 
-                  class="form-control" 
-                  id="username" 
+                <input
+                  type="text"
+                  class="form-control"
+                  id="username"
                   v-model="credentials.username"
-                  required 
+                  required
                   autocomplete="username"
-                >
+                />
               </div>
-              
+
               <div class="mb-3">
                 <label for="password" class="form-label">Password</label>
-                <input 
-                  type="password" 
-                  class="form-control" 
-                  id="password" 
+                <input
+                  type="password"
+                  class="form-control"
+                  id="password"
                   v-model="credentials.password"
                   required
                   autocomplete="current-password"
-                >
+                />
               </div>
-              
-              <button 
-                type="submit" 
+
+              <button
+                type="submit"
                 class="btn w-100"
                 :class="loginType === 'admin' ? 'btn-danger' : 'btn-primary'"
                 :disabled="loading"
@@ -65,7 +79,8 @@
 
             <!-- Register Link for Users -->
             <div v-if="loginType === 'user'" class="text-center mt-3">
-              <p class="mb-0">Don't have an account? 
+              <p class="mb-0">
+                Don't have an account?
                 <router-link to="/register" class="text-decoration-none">Register here</router-link>
               </p>
             </div>
@@ -76,9 +91,7 @@
               <div v-if="loginType === 'admin'">
                 <strong>Admin:</strong> username: admin, password: admin123
               </div>
-              <div v-else>
-                <strong>User:</strong> username: user1, password: user123
-              </div>
+              <div v-else><strong>User:</strong> username: user1, password: user123</div>
             </div>
           </div>
         </div>
@@ -101,7 +114,7 @@ const errorMessage = ref('')
 const successMessage = ref('')
 const credentials = ref({
   username: '',
-  password: ''
+  password: '',
 })
 
 // Check if user is already logged in
@@ -121,21 +134,34 @@ const handleLogin = async () => {
 
   try {
     // Determine API endpoint based on login type
-    const endpoint = loginType.value === 'admin' 
-      ? 'http://localhost:5000/api/admin/login'
-      : 'http://localhost:5000/api/login'
+    const endpoint =
+      loginType.value === 'admin'
+        ? 'http://localhost:5000/api/admin/login'
+        : 'http://localhost:5000/api/login'
 
     const response = await axios.post(endpoint, {
       username: credentials.value.username,
-      password: credentials.value.password
+      password: credentials.value.password,
     })
 
-    // Store authentication data
-    localStorage.setItem('token', response.data.token)
-    localStorage.setItem('userId', response.data.user.id)
-    localStorage.setItem('username', response.data.user.username)
-    localStorage.setItem('userRole', response.data.user.role)
-    localStorage.setItem('userFullName', response.data.user.full_name)
+    // Store authentication data (write to both session and local for consistency)
+    const auth = {
+      token: response.data.token,
+      userId: response.data.user.id,
+      username: response.data.user.username,
+      userRole: response.data.user.role,
+      userFullName: response.data.user.full_name,
+    }
+    sessionStorage.setItem('token', auth.token)
+    sessionStorage.setItem('userId', String(auth.userId))
+    sessionStorage.setItem('username', auth.username)
+    sessionStorage.setItem('userRole', auth.userRole)
+    sessionStorage.setItem('userFullName', auth.userFullName)
+    localStorage.setItem('token', auth.token)
+    localStorage.setItem('userId', String(auth.userId))
+    localStorage.setItem('username', auth.username)
+    localStorage.setItem('userRole', auth.userRole)
+    localStorage.setItem('userFullName', auth.userFullName)
 
     successMessage.value = response.data.message
 
@@ -143,7 +169,6 @@ const handleLogin = async () => {
     setTimeout(() => {
       redirectBasedOnRole(response.data.user.role)
     }, 1000)
-
   } catch (error) {
     if (error.response && error.response.data) {
       errorMessage.value = error.response.data.message

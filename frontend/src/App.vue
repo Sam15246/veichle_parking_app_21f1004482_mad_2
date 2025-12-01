@@ -14,14 +14,7 @@ onMounted(() => {
 })
 
 const initializeAuth = () => {
-  // Migrate once from localStorage if sessionStorage is empty
-  if (!sessionStorage.getItem('token') && localStorage.getItem('token')) {
-    const keys = ['token', 'userRole', 'userId', 'username', 'userFullName']
-    keys.forEach(k => {
-      const v = localStorage.getItem(k)
-      if (v) sessionStorage.setItem(k, v)
-    })
-  }
+  // Read sessionStorage only; login writes to both storages
   const token = sessionStorage.getItem('token')
   const role = sessionStorage.getItem('userRole')
   const user = sessionStorage.getItem('username')
@@ -42,12 +35,12 @@ const initializeAuth = () => {
   <div id="app">
     <!-- Navigation Bar -->
     <NavBar />
-    
+
     <!-- Main Content Area -->
     <main>
       <RouterView />
     </main>
-    
+
     <!-- Footer -->
     <footer class="bg-dark text-white text-center py-3 mt-5">
       <div class="container">
@@ -111,7 +104,9 @@ main {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Alert styles */

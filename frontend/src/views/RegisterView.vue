@@ -22,27 +22,27 @@
                 <!-- Username -->
                 <div class="col-md-6 mb-3">
                   <label for="username" class="form-label">Username *</label>
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    id="username" 
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="username"
                     v-model="formData.username"
                     required
                     autocomplete="username"
-                  >
+                  />
                 </div>
 
                 <!-- Email -->
                 <div class="col-md-6 mb-3">
                   <label for="email" class="form-label">Email *</label>
-                  <input 
-                    type="email" 
-                    class="form-control" 
-                    id="email" 
+                  <input
+                    type="email"
+                    class="form-control"
+                    id="email"
                     v-model="formData.email"
                     required
                     autocomplete="email"
-                  >
+                  />
                 </div>
               </div>
 
@@ -50,26 +50,26 @@
                 <!-- Full Name -->
                 <div class="col-md-6 mb-3">
                   <label for="fullName" class="form-label">Full Name *</label>
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    id="fullName" 
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="fullName"
                     v-model="formData.full_name"
                     required
                     autocomplete="name"
-                  >
+                  />
                 </div>
 
                 <!-- Phone -->
                 <div class="col-md-6 mb-3">
                   <label for="phone" class="form-label">Phone Number</label>
-                  <input 
-                    type="tel" 
-                    class="form-control" 
-                    id="phone" 
+                  <input
+                    type="tel"
+                    class="form-control"
+                    id="phone"
                     v-model="formData.phone"
                     autocomplete="tel"
-                  >
+                  />
                 </div>
               </div>
 
@@ -77,36 +77,36 @@
               <div class="row">
                 <div class="col-md-6 mb-3">
                   <label for="password" class="form-label">Password *</label>
-                  <input 
-                    type="password" 
-                    class="form-control" 
-                    id="password" 
+                  <input
+                    type="password"
+                    class="form-control"
+                    id="password"
                     v-model="formData.password"
                     required
                     autocomplete="new-password"
-                  >
+                  />
                 </div>
 
                 <!-- Confirm Password -->
                 <div class="col-md-6 mb-3">
                   <label for="confirmPassword" class="form-label">Confirm Password *</label>
-                  <input 
-                    type="password" 
-                    class="form-control" 
-                    id="confirmPassword" 
+                  <input
+                    type="password"
+                    class="form-control"
+                    id="confirmPassword"
                     v-model="confirmPassword"
                     required
                     autocomplete="new-password"
-                  >
+                  />
                 </div>
               </div>
 
               <!-- Address -->
               <div class="mb-3">
                 <label for="address" class="form-label">Address</label>
-                <textarea 
-                  class="form-control" 
-                  id="address" 
+                <textarea
+                  class="form-control"
+                  id="address"
                   rows="2"
                   v-model="formData.address"
                   autocomplete="street-address"
@@ -117,19 +117,19 @@
               <div class="row">
                 <div class="col-md-6 mb-3">
                   <label for="pinCode" class="form-label">Pin Code</label>
-                  <input 
-                    type="text" 
-                    class="form-control" 
-                    id="pinCode" 
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="pinCode"
                     v-model="formData.pin_code"
                     autocomplete="postal-code"
-                  >
+                  />
                 </div>
               </div>
 
               <!-- Submit Button -->
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 class="btn btn-primary w-100"
                 :disabled="loading || !isPasswordMatch"
               >
@@ -145,7 +145,8 @@
 
             <!-- Login Link -->
             <div class="text-center mt-3">
-              <p class="mb-0">Already have an account? 
+              <p class="mb-0">
+                Already have an account?
                 <router-link to="/login" class="text-decoration-none">Login here</router-link>
               </p>
             </div>
@@ -176,7 +177,7 @@ const formData = ref({
   phone: '',
   password: '',
   address: '',
-  pin_code: ''
+  pin_code: '',
 })
 
 // Computed property for password matching
@@ -199,17 +200,16 @@ const handleRegister = async () => {
 
   try {
     const response = await axios.post('http://localhost:5000/api/register', formData.value)
-    
+
     successMessage.value = response.data.message + ' Redirecting to login...'
-    
+
     // Clear form
     clearForm()
-    
+
     // Redirect to login after 2 seconds
     setTimeout(() => {
       router.push('/login')
     }, 2000)
-
   } catch (error) {
     if (error.response && error.response.data) {
       errorMessage.value = error.response.data.message
@@ -230,7 +230,7 @@ const clearForm = () => {
     phone: '',
     password: '',
     address: '',
-    pin_code: ''
+    pin_code: '',
   }
   confirmPassword.value = ''
 }

@@ -11,7 +11,11 @@
       </div>
       <div class="col-auto d-flex gap-2">
         <!-- New export button -->
-        <button class="btn btn-outline-success" @click="triggerAdminExport" :disabled="adminExporting || adminPolling">
+        <button
+          class="btn btn-outline-success"
+          @click="triggerAdminExport"
+          :disabled="adminExporting || adminPolling"
+        >
           <span v-if="adminExporting" class="spinner-border spinner-border-sm me-1"></span>
           Export All CSV
         </button>
@@ -121,17 +125,32 @@
             </div>
             <div class="col-md-2">
               <label class="form-label">Price/Hour</label>
-              <input type="number" step="0.01" v-model.number="lotForm.price_per_hour" class="form-control" required />
+              <input
+                type="number"
+                step="0.01"
+                v-model.number="lotForm.price_per_hour"
+                class="form-control"
+                required
+              />
             </div>
             <div class="col-md-2">
               <label class="form-label">Capacity</label>
-              <input type="number" min="1" v-model.number="lotForm.maximum_spots" class="form-control" required />
+              <input
+                type="number"
+                min="1"
+                v-model.number="lotForm.maximum_spots"
+                class="form-control"
+                required
+              />
             </div>
             <div class="col-12">
               <button class="btn btn-success me-2" type="submit">
                 {{ lotForm.id ? 'Update Lot' : 'Create Lot' }}
               </button>
-              <span v-if="lotMessage" :class="['ms-2', lotMessageType==='error'?'text-danger':'text-success']">
+              <span
+                v-if="lotMessage"
+                :class="['ms-2', lotMessageType === 'error' ? 'text-danger' : 'text-success']"
+              >
                 {{ lotMessage }}
               </span>
             </div>
@@ -142,7 +161,13 @@
             <table class="table table-striped align-middle">
               <thead>
                 <tr>
-                  <th>Name</th><th>Pin</th><th>Price</th><th>Capacity</th><th>Avail</th><th>Occ</th><th>Actions</th>
+                  <th>Name</th>
+                  <th>Pin</th>
+                  <th>Price</th>
+                  <th>Capacity</th>
+                  <th>Avail</th>
+                  <th>Occ</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -154,9 +179,15 @@
                   <td>{{ lot.available_spots }}</td>
                   <td>{{ lot.occupied_spots }}</td>
                   <td class="d-flex gap-2">
-                    <button class="btn btn-sm btn-outline-primary" @click="editLot(lot)">Edit</button>
-                    <button class="btn btn-sm btn-outline-info" @click="viewSpots(lot)">Spots</button>
-                    <button class="btn btn-sm btn-outline-danger" @click="deleteLot(lot)">Delete</button>
+                    <button class="btn btn-sm btn-outline-primary" @click="editLot(lot)">
+                      Edit
+                    </button>
+                    <button class="btn btn-sm btn-outline-info" @click="viewSpots(lot)">
+                      Spots
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" @click="deleteLot(lot)">
+                      Delete
+                    </button>
                   </td>
                 </tr>
               </tbody>
@@ -169,7 +200,9 @@
       <div class="card mb-4" v-if="selectedLot">
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Spots in {{ selectedLot.prime_location_name }}</h5>
-          <button class="btn btn-sm btn-outline-secondary" @click="selectedLot = null">Close</button>
+          <button class="btn btn-sm btn-outline-secondary" @click="selectedLot = null">
+            Close
+          </button>
         </div>
         <div class="card-body">
           <div class="mb-2">
@@ -178,13 +211,18 @@
           </div>
           <div class="table-responsive">
             <table class="table table-sm table-bordered">
-              <thead><tr><th>#</th><th>Status</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
               <tbody>
                 <tr v-for="s in spots" :key="s.id">
                   <td>{{ s.spot_number }}</td>
                   <td>
-                    <span class="badge" :class="s.status==='A'?'bg-success':'bg-danger'">
-                      {{ s.status==='A'?'Available':'Occupied' }}
+                    <span class="badge" :class="s.status === 'A' ? 'bg-success' : 'bg-danger'">
+                      {{ s.status === 'A' ? 'Available' : 'Occupied' }}
                     </span>
                   </td>
                 </tr>
@@ -204,8 +242,13 @@
             <table class="table table-striped align-middle">
               <thead>
                 <tr>
-                  <th>Username</th><th>Name</th><th>Email</th><th>Role</th>
-                  <th>Active Reservations</th><th>Active Spots</th><th>Lots</th>
+                  <th>Username</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Active Reservations</th>
+                  <th>Active Spots</th>
+                  <th>Lots</th>
                 </tr>
               </thead>
               <tbody>
@@ -213,7 +256,11 @@
                   <td>{{ u.username }}</td>
                   <td>{{ u.full_name }}</td>
                   <td>{{ u.email }}</td>
-                  <td><span class="badge" :class="u.role==='admin'?'bg-danger':'bg-primary'">{{ u.role }}</span></td>
+                  <td>
+                    <span class="badge" :class="u.role === 'admin' ? 'bg-danger' : 'bg-primary'">{{
+                      u.role
+                    }}</span>
+                  </td>
                   <td>{{ u.active_reservations_count }}</td>
                   <td>
                     <span v-if="u.active_spots.length" class="text-nowrap">
@@ -228,7 +275,7 @@
                     <span v-else class="text-muted">-</span>
                   </td>
                 </tr>
-                <tr v-if="users.length===0">
+                <tr v-if="users.length === 0">
                   <td colspan="7" class="text-center text-muted">No users found</td>
                 </tr>
               </tbody>
@@ -274,15 +321,23 @@
                   <td>{{ r.duration_hours }}</td>
                   <td>{{ r.billed_hours }}</td>
                   <td>
-                    <span class="badge"
-                      :class="r.status==='COMPLETED' ? 'bg-success' : (r.status==='ACTIVE' ? 'bg-primary' : 'bg-secondary')">
+                    <span
+                      class="badge"
+                      :class="
+                        r.status === 'COMPLETED'
+                          ? 'bg-success'
+                          : r.status === 'ACTIVE'
+                            ? 'bg-primary'
+                            : 'bg-secondary'
+                      "
+                    >
                       {{ r.status }}
                     </span>
                   </td>
                   <td>₹ {{ r.lot?.price_per_hour }}</td>
                   <td>₹ {{ r.final_cost ?? r.calculated_cost }}</td>
                 </tr>
-                <tr v-if="reservations.length===0">
+                <tr v-if="reservations.length === 0">
                   <td colspan="11" class="text-center text-muted">No reservations found</td>
                 </tr>
               </tbody>
@@ -296,14 +351,25 @@
         <div class="card-header d-flex justify-content-between align-items-center">
           <h5 class="mb-0">Admin Export Job Status</h5>
           <div>
-            <button v-if="adminPolling" class="btn btn-sm btn-outline-danger me-2" @click="stopAdminPolling">Stop</button>
-            <button v-else class="btn btn-sm btn-outline-secondary" @click="pollAdminStatus">Refresh</button>
+            <button
+              v-if="adminPolling"
+              class="btn btn-sm btn-outline-danger me-2"
+              @click="stopAdminPolling"
+            >
+              Stop
+            </button>
+            <button v-else class="btn btn-sm btn-outline-secondary" @click="pollAdminStatus">
+              Refresh
+            </button>
           </div>
         </div>
         <div class="card-body">
           <p class="mb-1"><strong>Job ID:</strong> {{ adminExportJobId }}</p>
-          <p class="mb-1"><strong>Status:</strong>
-            <span :class="statusBadgeClass(adminExportStatus.status)">{{ adminExportStatus.status }}</span>
+          <p class="mb-1">
+            <strong>Status:</strong>
+            <span :class="statusBadgeClass(adminExportStatus.status)">{{
+              adminExportStatus.status
+            }}</span>
           </p>
           <div v-if="adminExportStatus.error" class="text-danger mb-2">
             {{ adminExportStatus.error }}
@@ -313,7 +379,7 @@
               <i class="bi bi-download"></i> Download CSV
             </a>
           </div>
-          <div v-else-if="adminExportStatus.status==='COMPLETED'" class="text-warning">
+          <div v-else-if="adminExportStatus.status === 'COMPLETED'" class="text-warning">
             Download link missing. Try Refresh.
           </div>
           <small class="text-muted">Auto-refresh every 3s while polling.</small>
@@ -342,7 +408,6 @@
           </div>
         </div>
       </div>
-
     </div>
   </div>
 </template>
@@ -361,11 +426,18 @@ const statistics = ref({
   total_users: 0,
   total_parking_lots: 0,
   total_parking_spots: 0,
-  active_reservations: 0
+  active_reservations: 0,
 })
 
 const lots = ref([])
-const lotForm = ref({ id: null, prime_location_name: '', address: '', pin_code: '', price_per_hour: 20, maximum_spots: 10 })
+const lotForm = ref({
+  id: null,
+  prime_location_name: '',
+  address: '',
+  pin_code: '',
+  price_per_hour: 20,
+  maximum_spots: 10,
+})
 const lotMessage = ref('')
 const lotMessageType = ref('success')
 
@@ -380,7 +452,7 @@ const analytics = ref({
   lots: [],
   occupancy_percent: [],
   revenue_by_lot: [],
-  total_completed_revenue: 0
+  total_completed_revenue: 0,
 })
 
 // Admin export state
@@ -408,7 +480,7 @@ const loadDashboardData = async () => {
   try {
     const token = sessionStorage.getItem('token')
     const response = await axios.get('http://localhost:5000/api/admin/dashboard', {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     })
     statistics.value = response.data.statistics
   } catch (error) {
@@ -436,20 +508,34 @@ const loadLots = async () => {
 }
 
 const resetLotForm = () => {
-  lotForm.value = { id: null, prime_location_name: '', address: '', pin_code: '', price_per_hour: 20, maximum_spots: 10 }
+  lotForm.value = {
+    id: null,
+    prime_location_name: '',
+    address: '',
+    pin_code: '',
+    price_per_hour: 20,
+    maximum_spots: 10,
+  }
   lotMessage.value = ''
 }
 
 const submitLot = async () => {
   try {
     if (lotForm.value.id) {
-      await axios.put(`http://localhost:5000/api/admin/lots/${lotForm.value.id}`, lotForm.value, { headers: authHeader() })
-      lotMessage.value = 'Lot updated'; lotMessageType.value = 'success'
+      await axios.put(`http://localhost:5000/api/admin/lots/${lotForm.value.id}`, lotForm.value, {
+        headers: authHeader(),
+      })
+      lotMessage.value = 'Lot updated'
+      lotMessageType.value = 'success'
     } else {
-      await axios.post('http://localhost:5000/api/admin/lots', lotForm.value, { headers: authHeader() })
-      lotMessage.value = 'Lot created'; lotMessageType.value = 'success'
+      await axios.post('http://localhost:5000/api/admin/lots', lotForm.value, {
+        headers: authHeader(),
+      })
+      lotMessage.value = 'Lot created'
+      lotMessageType.value = 'success'
     }
-    await loadLots(); resetLotForm()
+    await loadLots()
+    resetLotForm()
   } catch (e) {
     lotMessage.value = e?.response?.data?.message || 'Operation failed'
     lotMessageType.value = 'error'
@@ -474,11 +560,13 @@ const deleteLot = async (lot) => {
 
 const viewSpots = async (lot) => {
   selectedLot.value = lot
-  const res = await axios.get(`http://localhost:5000/api/admin/lots/${lot.id}/spots`, { headers: authHeader() })
+  const res = await axios.get(`http://localhost:5000/api/admin/lots/${lot.id}/spots`, {
+    headers: authHeader(),
+  })
   spots.value = res.data.data
   spotsSummary.value = {
     available_spots: res.data.lot.available_spots,
-    occupied_spots: res.data.lot.occupied_spots
+    occupied_spots: res.data.lot.occupied_spots,
   }
 }
 
@@ -490,13 +578,17 @@ const loadUsers = async () => {
 
 // Reservations
 const loadReservations = async () => {
-  const res = await axios.get('http://localhost:5000/api/admin/reservations', { headers: authHeader() })
+  const res = await axios.get('http://localhost:5000/api/admin/reservations', {
+    headers: authHeader(),
+  })
   reservations.value = res.data.data || []
 }
 
 // Analytics
 const loadAnalytics = async () => {
-  const res = await axios.get('http://localhost:5000/api/admin/analytics/overview', { headers: authHeader() })
+  const res = await axios.get('http://localhost:5000/api/admin/analytics/overview', {
+    headers: authHeader(),
+  })
   analytics.value = res.data.data
   renderAnalyticsCharts()
 }
@@ -510,9 +602,15 @@ const renderAnalyticsCharts = async () => {
       type: 'bar',
       data: {
         labels: analytics.value.lots,
-        datasets: [{ label: 'Occupancy %', data: analytics.value.occupancy_percent, backgroundColor: '#0d6efd' }]
+        datasets: [
+          {
+            label: 'Occupancy %',
+            data: analytics.value.occupancy_percent,
+            backgroundColor: '#0d6efd',
+          },
+        ],
       },
-      options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
+      options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } },
     })
   }
   if (revCtx) {
@@ -520,9 +618,15 @@ const renderAnalyticsCharts = async () => {
       type: 'bar',
       data: {
         labels: analytics.value.lots,
-        datasets: [{ label: 'Revenue (₹)', data: analytics.value.revenue_by_lot, backgroundColor: '#198754' }]
+        datasets: [
+          {
+            label: 'Revenue (₹)',
+            data: analytics.value.revenue_by_lot,
+            backgroundColor: '#198754',
+          },
+        ],
       },
-      options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      options: { responsive: true, scales: { y: { beginAtZero: true } } },
     })
   }
 }
@@ -530,38 +634,59 @@ const renderAnalyticsCharts = async () => {
 // Extend mounted promise group
 onMounted(async () => {
   // ...existing auth + base stats...
-  await Promise.all([loadDashboardData(), loadLots(), loadUsers(), loadReservations(), loadAnalytics()])
+  await Promise.all([
+    loadDashboardData(),
+    loadLots(),
+    loadUsers(),
+    loadReservations(),
+    loadAnalytics(),
+  ])
 })
 
 const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem('token')}` })
-const formatDate = (iso) => iso ? new Date(iso).toLocaleString() : '-'
+const formatDate = (iso) => (iso ? new Date(iso).toLocaleString() : '-')
 
 const triggerAdminExport = async () => {
   adminExporting.value = true
   adminExportStatus.value = {}
   adminExportDownloadUrl.value = ''
   try {
-    const res = await axios.post('http://localhost:5000/api/admin/export-all', {}, { headers: authHeader() })
+    const res = await axios.post(
+      'http://localhost:5000/api/admin/export-all',
+      {},
+      { headers: authHeader() },
+    )
     adminExportJobId.value = res.data.job_id
     adminExporting.value = false
     startAdminPolling()
   } catch (e) {
     adminExporting.value = false
-    adminExportStatus.value = { status: 'ERROR', error: e?.response?.data?.message || 'Failed to start export' }
+    adminExportStatus.value = {
+      status: 'ERROR',
+      error: e?.response?.data?.message || 'Failed to start export',
+    }
   }
 }
 
 const pollAdminStatus = async () => {
   if (!adminExportJobId.value) return
   try {
-    const res = await axios.get(`http://localhost:5000/api/admin/export-all/${adminExportJobId.value}`, { headers: authHeader() })
+    const res = await axios.get(
+      `http://localhost:5000/api/admin/export-all/${adminExportJobId.value}`,
+      { headers: authHeader() },
+    )
     adminExportStatus.value = res.data.job
     if (res.data.job.download) {
       adminExportDownloadUrl.value = `http://localhost:5000${res.data.job.download}`
+      // Auto-download with auth header
+      await autoDownload(adminExportDownloadUrl.value)
       stopAdminPolling()
     }
   } catch (e) {
-    adminExportStatus.value = { status: 'ERROR', error: e?.response?.data?.message || 'Status fetch failed' }
+    adminExportStatus.value = {
+      status: 'ERROR',
+      error: e?.response?.data?.message || 'Status fetch failed',
+    }
     stopAdminPolling()
   }
 }
@@ -577,6 +702,27 @@ const stopAdminPolling = () => {
   if (adminPollTimer) {
     clearInterval(adminPollTimer)
     adminPollTimer = null
+  }
+}
+
+// Perform an authenticated download and trigger browser save prompt
+const autoDownload = async (url) => {
+  try {
+    const res = await axios.get(url, { headers: authHeader(), responseType: 'blob' })
+    const blob = new Blob([res.data])
+    const dlUrl = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const cd = res.headers['content-disposition'] || ''
+    const match = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/)
+    const filename = decodeURIComponent(match?.[1] || match?.[2] || 'admin_export.csv')
+    a.href = dlUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(dlUrl)
+  } catch (err) {
+    console.error('Admin auto-download failed:', err)
   }
 }
 

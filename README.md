@@ -2,13 +2,13 @@
 
 A comprehensive vehicle parking management system built with Flask (Backend) and Vue.js (Frontend) as part of Modern Application Development II course.
 
-## 🚗 Project Overview
+## Project Overview
 
 This parking management system provides a complete solution for managing parking lots, reservations, and user accounts with role-based access control.
 
 ### **Key Features:**
 
-## 🏗️ Architecture
+## Architecture
 
 ### **Backend (Flask)**
 - RESTful API with Flask-RESTful
@@ -22,25 +22,25 @@ This parking management system provides a complete solution for managing parking
 - Bootstrap 5 for clean, responsive UI
 - Axios for API communication
 
-## 📊 Milestone Progress
+##  Milestone Progress
 
 ### **Core Requirements (8 Milestones)**
-- [x] Milestone 0: GitHub Repository Setup (5%) ✅
-- [ ] Milestone 1: Database Models and Schema Setup (15%)
-- [ ] Milestone 2: Authentication & Role-based Access (10%)
-- [ ] Milestone 3: Admin Dashboard and Lot/Spot Management (20%)
-- [ ] Milestone 4: User Dashboard and Reservation System (15%)
-- [ ] Milestone 5: Reservation History and Cost Calculation (10%)
+- [x] Milestone 0: GitHub Repository Setup (5%)
+- [x] Milestone 1: Database Models and Schema Setup (15%)
+- [x] Milestone 2: Authentication & Role-based Access (10%)
+- [x] Milestone 3: Admin Dashboard and Lot/Spot Management (20%)
+- [x] Milestone 4: User Dashboard and Reservation System (15%)
+- [x] Milestone 5: Reservation History and Cost Calculation (10%)
 - [x] Milestone 6: Parking Analytics and Charts (10%)
-- [ ] Milestone 7: API Performance Optimization & Redis Caching (5%)
-- [ ] Milestone 8: Backend Jobs - Daily Reminders & Monthly Reports (10%)
+- [x] Milestone 7: API Performance Optimization & Redis Caching (5%)
+- [x] Milestone 8: Backend Jobs - Daily Reminders & Monthly Reports (10%)
 
 ### **Recommended Enhancements**
 - [ ] Search Functionality for Lots and Spots
-- [ ] UI/UX Enhancements and PWA Features
+- [x] UI/UX Enhancements and PWA Features
 - [ ] Advanced Analytics and AI Features
 
-## 🚀 Getting Started
+## Getting Started
 
 ### **Prerequisites**
 - Python 3.8+
@@ -62,7 +62,7 @@ npm install
 npm run dev
 ```
 
-## 🔌 Redis Setup (Caching + Celery Broker)
+## Redis Setup (Caching + Celery Broker)
 
 Options:
 - Local install (Linux/macOS): redis-server
@@ -83,7 +83,7 @@ set ANALYTICS_CACHE_TTL=120
 set MAX_ACTIVE_RESERVATIONS_PER_USER=5
 ```
 
-## 🧵 Celery Workers + Beat
+## Celery Workers + Beat
 
 Start API (creates DB on first run):
 ```bash
@@ -114,7 +114,7 @@ Common issues:
 - Error 10061 (Windows): Redis not running or blocked; start Redis or use Docker.
 - AttributeError user_options: use celery -A celery_worker.celery ... (not the factory).
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 **Backend:**
 - Flask 3.0
@@ -130,13 +130,12 @@ Common issues:
 - Chart.js
 - Axios
 
-## 🎯 Project Goals
+## Project Goals
 
-1. **Functionality First**: Clean, working features over fancy UI
-2. **Role-Based Access**: Clear separation between admin and user capabilities
-3. **Real-time Updates**: Live parking availability and status
-4. **Performance**: Optimized with caching and background processing
-5. **Scalability**: Modular design for easy feature additions
+1. **Role-Based Access**: Clear separation between admin and user capabilities
+2. **Real-time Updates**: Live parking availability and status
+3. **Performance**: Optimized with caching and background processing
+4. **Scalability**: Modular design for easy feature additions
 
 
 **Developer**: Syed Ali Mujtaba
