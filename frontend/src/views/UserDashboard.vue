@@ -265,43 +265,7 @@
         </div>
       </div>
 
-      <!-- Export Status Panel -->
-      <div class="card mb-4" v-if="exportJobId">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">Export Job Status</h5>
-          <div>
-            <button
-              v-if="userPolling"
-              class="btn btn-sm btn-outline-danger me-2"
-              @click="stopUserPolling"
-            >
-              Stop
-            </button>
-            <button v-else class="btn btn-sm btn-outline-secondary" @click="pollUserStatus">
-              Refresh
-            </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <p class="mb-1"><strong>Job ID:</strong> {{ exportJobId }}</p>
-          <p class="mb-1">
-            <strong>Status:</strong>
-            <span :class="statusBadgeClass(exportStatus.status)">{{ exportStatus.status }}</span>
-          </p>
-          <div v-if="exportStatus.error" class="text-danger mb-2">
-            {{ exportStatus.error }}
-          </div>
-          <div v-if="exportDownloadUrl">
-            <a :href="exportDownloadUrl" class="btn btn-sm btn-success" download>
-              <i class="bi bi-download"></i> Download CSV
-            </a>
-          </div>
-          <div v-else-if="exportStatus.status === 'COMPLETED'" class="text-warning">
-            Download link missing. Try Refresh.
-          </div>
-          <small class="text-muted">Auto-refresh every 3s while polling.</small>
-        </div>
-      </div>
+      
 
       <!-- User Analytics -->
       <div class="card mb-4" v-if="uAnalytics.lots.length">
@@ -422,23 +386,7 @@ let userPollStopTimeout = null
 // Helpers
 const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem('token')}` })
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleString() : '-')
-// Export status badge class
-const statusBadgeClass = (status) => {
-  const base = 'badge '
-  switch (status) {
-    case 'COMPLETED':
-      return base + 'bg-success'
-    case 'RUNNING':
-      return base + 'bg-primary'
-    case 'PENDING':
-      return base + 'bg-warning text-dark'
-    case 'FAILED':
-    case 'ERROR':
-      return base + 'bg-danger'
-    default:
-      return base + 'bg-secondary'
-  }
-}
+// (no visible status badge UI)
 
 // Mounted
 onMounted(async () => {

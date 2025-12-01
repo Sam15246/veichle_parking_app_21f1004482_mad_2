@@ -252,7 +252,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="u in users" :key="u.id">
+                <tr v-for="u in displayUsers" :key="u.id">
                   <td>{{ u.username }}</td>
                   <td>{{ u.full_name }}</td>
                   <td>{{ u.email }}</td>
@@ -275,7 +275,7 @@
                     <span v-else class="text-muted">-</span>
                   </td>
                 </tr>
-                <tr v-if="users.length === 0">
+                <tr v-if="displayUsers.length === 0">
                   <td colspan="7" class="text-center text-muted">No users found</td>
                 </tr>
               </tbody>
@@ -346,45 +346,7 @@
         </div>
       </div>
 
-      <!-- Admin Export Status -->
-      <div class="card mb-4" v-if="adminExportJobId">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">Admin Export Job Status</h5>
-          <div>
-            <button
-              v-if="adminPolling"
-              class="btn btn-sm btn-outline-danger me-2"
-              @click="stopAdminPolling"
-            >
-              Stop
-            </button>
-            <button v-else class="btn btn-sm btn-outline-secondary" @click="pollAdminStatus">
-              Refresh
-            </button>
-          </div>
-        </div>
-        <div class="card-body">
-          <p class="mb-1"><strong>Job ID:</strong> {{ adminExportJobId }}</p>
-          <p class="mb-1">
-            <strong>Status:</strong>
-            <span :class="statusBadgeClass(adminExportStatus.status)">{{
-              adminExportStatus.status
-            }}</span>
-          </p>
-          <div v-if="adminExportStatus.error" class="text-danger mb-2">
-            {{ adminExportStatus.error }}
-          </div>
-          <div v-if="adminExportDownloadUrl">
-            <a :href="adminExportDownloadUrl" class="btn btn-sm btn-success" download>
-              <i class="bi bi-download"></i> Download CSV
-            </a>
-          </div>
-          <div v-else-if="adminExportStatus.status === 'COMPLETED'" class="text-warning">
-            Download link missing. Try Refresh.
-          </div>
-          <small class="text-muted">Auto-refresh every 3s while polling.</small>
-        </div>
-      </div>
+      
 
       <!-- Analytics -->
       <div class="card mb-4">
@@ -413,7 +375,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 
@@ -576,6 +538,11 @@ const loadUsers = async () => {
   users.value = res.data.data
 }
 
+// Users displayed in the table: exclude the admin account
+const displayUsers = computed(() =>
+  (users.value || []).filter((u) => u?.role !== 'admin' && u?.username !== 'admin'),
+)
+
 // Reservations
 const loadReservations = async () => {
   const res = await axios.get('http://localhost:5000/api/admin/reservations', {
@@ -726,13 +693,7 @@ const autoDownload = async (url) => {
   }
 }
 
-const statusBadgeClass = (s) => {
-  if (s === 'COMPLETED') return 'badge bg-success'
-  if (s === 'RUNNING') return 'badge bg-primary'
-  if (s === 'PENDING') return 'badge bg-secondary'
-  if (s === 'FAILED' || s === 'ERROR') return 'badge bg-danger'
-  return 'badge bg-light text-dark'
-}
+// Removed status badge helper as status panel was removed
 </script>
 
 <style scoped>
