@@ -100,12 +100,10 @@ class Reservation(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Cost and Status
-    estimated_cost = db.Column(db.Float)
     final_cost = db.Column(db.Float)
     status = db.Column(db.String(20), default=ReservationStatus.ACTIVE.value)
     
     # Additional fields
-    remarks = db.Column(db.Text)
     
     @property
     def duration_hours(self):

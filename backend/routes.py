@@ -594,8 +594,7 @@ class CreateReservation(Resource):
                 user_id=current_user.id,
                 spot_id=spot.id,
                 vehicle_number=vehicle_number,
-                status=ReservationStatus.ACTIVE.value,
-                estimated_cost=lot.price_per_hour  # first hour minimum charge
+                status=ReservationStatus.ACTIVE.value
             )
             db.session.add(res); db.session.commit()
             cache_delete('parking_lots_public', 'admin_lots_list', 'admin_analytics_overview',
@@ -789,7 +788,6 @@ class AdminReservationsAPI(Resource):
                 'leaving_timestamp': r.leaving_timestamp.isoformat() if r.leaving_timestamp else None,
                 'duration_hours': r.duration_hours,
                 'billed_hours': r.billed_hours,
-                'estimated_cost': r.estimated_cost,
                 'calculated_cost': r.calculated_cost,
                 'final_cost': r.final_cost,
             }
